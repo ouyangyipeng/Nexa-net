@@ -1,0 +1,102 @@
+[package]
+name = "nexa-net"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["Nexa-net Team"]
+description = "Decentralized M2M communication infrastructure for autonomous agents"
+license = "Apache-2.0"
+repository = "https://github.com/nexa-net/nexa-net"
+readme = "README.md"
+keywords = ["agent", "m2m", "decentralized", "network", "rpc"]
+categories = ["network-programming", "cryptography", "web-programming"]
+
+[workspace]
+members = [
+    ".",
+]
+
+[dependencies]
+# 异步运行时
+tokio = { version = "1.35", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# 序列化
+prost = "0.12"
+prost-types = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# 压缩
+lz4_flex = "0.11"
+
+# 枚举转换
+num-derive = "0.4"
+num-traits = "0.2"
+
+# 加密与安全
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+rand = "0.8"
+sha2 = "0.10"
+base64 = "0.21"
+hex = "0.4"
+
+# 网络与协议
+tonic = "0.10"
+tonic-build = "0.10"
+hyper = { version = "1.0", features = ["full"] }
+tower = "0.4"
+http-body-util = "0.1"
+
+# 存储
+rocksdb = "0.21"
+
+# 日志与监控
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# 错误处理
+thiserror = "1.0"
+anyhow = "1.0"
+
+# 时间处理
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Security
+zeroize = "1.7"
+
+# 配置
+config = "0.14"
+toml = "0.8"
+
+[build-dependencies]
+tonic-build = "0.10"
+prost-build = "0.12"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["async_tokio"] }
+proptest = "1.4"
+tempfile = "3.10"
+
+[[bin]]
+name = "nexa-proxy"
+path = "src/proxy/main.rs"
+
+[lib]
+name = "nexa_net"
+path = "src/lib.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true
