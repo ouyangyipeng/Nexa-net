@@ -922,7 +922,99 @@ class IntrusionDetection:
 }
 ```
 
-### 8.2 安全检查清单
+### 8.2 安全模块实现 (v0.2.0+)
+
+Nexa-net v0.2.0 新增了完整的安全模块，提供审计日志、密钥轮换、速率限制和加密存储功能。
+
+#### 8.2.1 审计日志框架
+
+```rust
+use nexa_net::security::{AuditLogger, AuditEvent, AuthMethod};
+
+// 创建审计日志器
+let audit = AuditLogger::with_logging();
+
+// 记录认证成功
+audit.log_auth_success("did:nexa:user", AuthMethod::Signature, Some("192.168.1.1"))?;
+
+// 记录密钥轮换
+audit.log_key_rotated("key-1", 1, 2)?;
+
+// 记录安全违规
+audit.log_security_violation("brute_force", "Multiple failed login attempts", "high")?;
+```
+
+#### 8.2.2 密钥轮换管理
+
+```rust
+use nexa_net::security::{KeyRotator, KeyRotationPolicy};
+
+// 配置轮换策略
+let policy = KeyRotationPolicy {
+    rotation_interval_days: 90,      // 每 90 天轮换
+    warning_period_days: 14,         // 提前 14 天警告
+    max_key_age_days: 365,           // 最大密钥年龄
+    auto_rotate: true,               // 自动轮换
+    min_uses_before_rotation: 100,   // 最少使用次数
+};
+
+let rotator = KeyRotator::new(policy);
+
+// 注册密钥
+rotator.register_key("key-1", "signing").await?;
+
+// 检查是否需要轮换
+if rotator.needs_rotation("key-1").await? {
+    rotator.mark_rotated("key-1").await?;
+}
+```
+
+#### 8.2.3 速率限制
+
+```rust
+use nexa_net::security::{RateLimiter, RateLimitConfig, RateLimitKey};
+
+// 配置速率限制
+let config = RateLimitConfig {
+    requests_per_minute: 60,
+    requests_per_hour: 1000,
+    requests_per_day: 10000,
+    burst_size: 10,
+    enabled: true,
+};
+
+let limiter = RateLimiter::new(config);
+
+// 检查请求
+let key = RateLimitKey::Did("did:nexa:user".to_string());
+match limiter.check(&key).await? {
+    RateLimitResult::Allowed => { /* 处理请求 */ }
+    RateLimitResult::Denied { reason, retry_after } => {
+        println!("Rate limited: {}. Retry in {}s", reason, retry_after);
+    }
+}
+```
+
+#### 8.2.4 加密密钥存储
+
+```rust
+use nexa_net::security::SecureKeyStorage;
+
+// 创建加密存储
+let encryption_key = [42u8; 32];  // 应从安全源加载
+let storage = SecureKeyStorage::new(Some(encryption_key));
+
+// 存储密钥
+storage.store_key("key-1", "signing", key_data, Some("Main signing key")).await?;
+
+// 获取密钥
+let (data, metadata) = storage.get_key("key-1").await?.unwrap();
+
+// 轮换密钥
+let new_version = storage.rotate_key("key-1", new_key_data).await?;
+```
+
+### 8.3 安全检查清单
 
 #### 8.2.1 部署前检查
 

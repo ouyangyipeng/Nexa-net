@@ -137,6 +137,15 @@ result = nexa_call(intent="translate English PDF to Chinese", data=pdf_bytes)
 | **Supernode** | 语义路由表、NAT 穿透、中继 | 高可用服务器集群 |
 | **P2P Mesh** | 直连通道，降低延迟 | Agent 之间 |
 
+### 2.3 新增模块 (v0.2.0)
+
+| 模块 | 路径 | 功能 |
+|------|------|------|
+| **Embedding** | `src/discovery/embedding/` | 文本向量化，支持 ONNX/Mock 后端 |
+| **Storage** | `src/storage/` | 持久化存储，支持 Memory/PostgreSQL/Redis |
+| **Security** | `src/security/` | 审计日志、密钥轮换、速率限制、加密存储 |
+| **Benchmarks** | `benches/` | Criterion 性能基准测试 |
+
 ---
 
 ## 3. 四层架构模型

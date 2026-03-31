@@ -413,6 +413,61 @@ Nexa-net 推荐使用轻量级 Embedding 模型，平衡性能与精度：
 
 ### 3.3 向量生成实现
 
+#### Rust 实现 (Nexa-net v0.2.0+)
+
+Nexa-net 现已内置 Embedding 模块，支持多种后端：
+
+```rust
+use nexa_net::discovery::{Embedder, VectorizerBuilder};
+use std::path::PathBuf;
+
+// 方式 1: 使用 Mock Embedder (测试)
+let vectorizer = VectorizerBuilder::new()
+    .mock(384)  // 384 维向量
+    .build()?;
+
+// 方式 2: 使用 ONNX Runtime (生产)
+let vectorizer = VectorizerBuilder::new()
+    .onnx(
+        PathBuf::from("models/all-MiniLM-L6-v2/model.onnx"),
+        512  // 最大序列长度
+    )
+    .build()?;
+
+// 向量化文本
+let vector = vectorizer.vectorize("translate English to Chinese")?;
+println!("Vector dimensions: {}", vector.dimensions);
+```
+
+#### Embedder Trait 定义
+
+```rust
+/// Embedder trait - 支持多种后端
+pub trait Embedder: Send + Sync {
+    /// 将文本转换为向量
+    fn embed(&self, text: &str) -> Result<Vec<f32>>;
+    
+    /// 批量嵌入
+    fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>>;
+    
+    /// 获取向量维度
+    fn dimensions(&self) -> usize;
+    
+    /// 获取模型名称
+    fn model_name(&self) -> &str;
+}
+```
+
+#### 支持的后端
+
+| 后端 | Feature Flag | 说明 |
+|------|--------------|------|
+| MockEmbedder | 默认 | 用于测试，确定性输出 |
+| OnnxEmbedder | `embedding-onnx` | ONNX Runtime 本地推理 |
+| ApiEmbedder | 计划中 | 远程 API 调用 |
+
+#### Python 实现 (参考)
+
 ```python
 from sentence_transformers import SentenceTransformer
 import numpy as np

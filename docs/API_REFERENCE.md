@@ -1207,6 +1207,93 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ---
 
+## 5.4 新增模块 API (v0.2.0)
+
+### 5.4.1 Embedding API
+
+```rust
+use nexa_net::discovery::{Embedder, VectorizerBuilder};
+use std::path::PathBuf;
+
+// 创建 Vectorizer
+let vectorizer = VectorizerBuilder::new()
+    .mock(384)  // Mock embedder
+    .build()?;
+
+// 或使用 ONNX
+let vectorizer = VectorizerBuilder::new()
+    .onnx(PathBuf::from("models/model.onnx"), 512)
+    .build()?;
+
+// 向量化文本
+let vector = vectorizer.vectorize("translate English to Chinese")?;
+let batch = vectorizer.vectorize_batch(&["text1", "text2"])?;
+
+// 获取信息
+println!("Dimensions: {}", vectorizer.dimensions());
+println!("Model: {}", vectorizer.model_name());
+```
+
+### 5.4.2 Storage API
+
+```rust
+use nexa_net::storage::MemoryStore;
+use nexa_net::types::CapabilitySchema;
+
+let store = MemoryStore::default_store();
+
+// 存储能力
+store.register_capability(schema).await?;
+
+// 查询能力
+let cap = store.get_capability("did:nexa:service").await?;
+let caps = store.list_capabilities().await?;
+let by_tags = store.find_capabilities_by_tags(&["nlp".to_string()]).await?;
+
+// 缓存操作
+store.cache_set("key", serde_json::json!({"data": "value"})).await?;
+let cached = store.cache_get("key").await?;
+
+// 统计
+let stats = store.stats().await;
+```
+
+### 5.4.3 Security API
+
+```rust
+use nexa_net::security::{
+    AuditLogger, KeyRotator, KeyRotationPolicy,
+    RateLimiter, RateLimitConfig, RateLimitKey,
+    SecureKeyStorage,
+};
+
+// 审计日志
+let audit = AuditLogger::with_logging();
+audit.log_auth_success("did:nexa:user", AuthMethod::Signature, None)?;
+
+// 密钥轮换
+let rotator = KeyRotator::new(KeyRotationPolicy::default());
+rotator.register_key("key-1", "signing").await?;
+if rotator.needs_rotation("key-1").await? {
+    rotator.mark_rotated("key-1").await?;
+}
+
+// 速率限制
+let limiter = RateLimiter::new(RateLimitConfig::default());
+let key = RateLimitKey::Did("did:nexa:user".to_string());
+match limiter.check(&key).await? {
+    RateLimitResult::Allowed => { /* 处理 */ }
+    RateLimitResult::Denied { reason, retry_after } => { /* 拒绝 */ }
+}
+
+// 加密存储
+let storage = SecureKeyStorage::new(Some(encryption_key));
+storage.store_key("key-1", "signing", key_data, None).await?;
+let (data, meta) = storage.get_key("key-1").await?.unwrap();
+```
+
+---
+
 ## 6. 错误处理
 
 ### 6.1 错误码体系
