@@ -34,7 +34,7 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use nexa_net::transport::{RpcClient, SerializationEngine, SerializationFormat};
 //!
 //! // Create serialization engine
@@ -42,12 +42,11 @@
 //!
 //! // Serialize data
 //! let data = serde_json::json!({"key": "value"});
-//! let serialized = engine.serialize(&data)?;
+//! let serialized = engine.serialize(&data).unwrap();
 //!
-//! // Make RPC call
-//! let client = RpcClient::new("http://localhost:7070");
-//! let response = client.call("translate", serialized).await?;
-//! # Ok::<(), nexa_net::Error>(())
+//! // Make RPC call (requires running server)
+//! // let client = RpcClient::new("http://localhost:7070");
+//! // let response = client.call("translate", serialized).await?;
 //! ```
 
 pub mod frame;

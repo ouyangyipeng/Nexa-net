@@ -1,0 +1,146 @@
+# Nexa-net Docker Compose Configuration
+# For local development and testing
+
+version: '3.8'
+
+services:
+  # Nexa-Proxy - Local Sidecar Proxy
+  nexa-proxy:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    image: nexa-net/proxy:latest
+    container_name: nexa-proxy
+    hostname: nexa-proxy
+    ports:
+      - "7070:7070"   # REST API
+      - "7071:7071"   # gRPC API
+      - "9090:9090"   # Metrics
+    volumes:
+      - nexa-data:/var/lib/nexa
+      - nexa-logs:/var/log/nexa
+      - ./config/proxy:/etc/nexa:ro
+    environment:
+      - RUST_LOG=debug
+      - NEXA_PROXY_ENDPOINT=0.0.0.0:7070
+      - NEXA_PROXY_GRPC_ENDPOINT=0.0.0.0:7071
+      - NEXA_PROXY_METRICS_ENDPOINT=0.0.0.0:9090
+      - NEXA_PROXY_SUPERNODE_URL=http://supernode:8080
+    networks:
+      - nexa-net
+    depends_on:
+      - supernode
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7070/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Supernode - Network Coordinator
+  supernode:
+    image: nexa-net/supernode:latest
+    container_name: nexa-supernode
+    hostname: supernode
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile.supernode
+    ports:
+      - "8080:8080"   # HTTP API
+      - "8443:8443"   # HTTPS API
+      - "9091:9091"   # Metrics
+    volumes:
+      - supernode-data:/var/lib/nexa
+      - supernode-logs:/var/log/nexa
+      - ./config/supernode:/etc/nexa:ro
+    environment:
+      - RUST_LOG=info
+      - NEXA_SUPERNODE_HTTP_ENDPOINT=0.0.0.0:8080
+      - NEXA_SUPERNODE_HTTPS_ENDPOINT=0.0.0.0:8443
+      - NEXA_SUPERNODE_METRICS_ENDPOINT=0.0.0.0:9091
+    networks:
+      - nexa-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis - Caching Layer (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: nexa-redis
+    hostname: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - nexa-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Prometheus - Metrics Collection (optional)
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: nexa-prometheus
+    hostname: prometheus
+    ports:
+      - "9092:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - nexa-net
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Grafana - Metrics Visualization (optional)
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: nexa-grafana
+    hostname: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=nexa-admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - nexa-net
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    depends_on:
+      - prometheus
+
+networks:
+  nexa-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  nexa-data:
+  nexa-logs:
+  supernode-data:
+  supernode-logs:
+  redis-data:
+  prometheus-data:
+  grafana-data:

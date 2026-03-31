@@ -1,8 +1,17 @@
 //! Semantic Vectorizer
 //!
 //! Converts text (intents, capabilities) into semantic vectors.
+//! Supports multiple embedding backends through the Embedder trait.
 
 use crate::error::Result;
+use std::sync::Arc;
+
+// Re-export embedding types for convenience
+pub use crate::discovery::embedding::{Embedder, EmbeddingConfig};
+pub use crate::discovery::embedding::mock::MockEmbedder;
+
+#[cfg(feature = "embedding-onnx")]
+pub use crate::discovery::embedding::OnnxEmbedder;
 
 /// Semantic vector representation
 #[derive(Debug, Clone)]
@@ -40,47 +49,109 @@ impl SemanticVector {
         
         dot / (norm_a * norm_b)
     }
+    
+    /// Create from raw embedding output
+    pub fn from_embedding(data: Vec<f32>) -> Self {
+        Self::new(data)
+    }
 }
 
 /// Vectorizer for converting text to vectors
+///
+/// Uses an Embedder backend for actual text embedding.
+/// Default backend is MockEmbedder for testing without external dependencies.
 pub struct Vectorizer {
-    /// Vector dimensions
-    dimensions: usize,
+    /// Embedder backend
+    embedder: Arc<dyn Embedder>,
 }
 
 impl Vectorizer {
-    /// Create a new vectorizer
+    /// Create a new vectorizer with default MockEmbedder
     pub fn new() -> Self {
-        Self { dimensions: 384 }
+        Self {
+            embedder: Arc::new(MockEmbedder::new(384)),
+        }
     }
     
-    /// Vectorize text
-    /// 
-    /// Note: In production, this would use an embedding model.
-    /// For now, we use a simple hash-based approach for testing.
+    /// Create a vectorizer with a specific embedder
+    pub fn with_embedder(embedder: Arc<dyn Embedder>) -> Self {
+        Self { embedder }
+    }
+    
+    /// Create a vectorizer from configuration
+    pub fn from_config(config: EmbeddingConfig) -> Result<Self> {
+        let embedder = crate::discovery::embedding::create_embedder(config)?;
+        Ok(Self { embedder })
+    }
+    
+    /// Vectorize a single text
     pub fn vectorize(&self, text: &str) -> Result<SemanticVector> {
-        // Simple hash-based vectorization for testing
-        // TODO: Replace with actual embedding model
-        let mut data = vec![0.0f32; self.dimensions];
-        
-        for (i, byte) in text.as_bytes().iter().enumerate() {
-            let idx = (i + *byte as usize) % self.dimensions;
-            data[idx] += (*byte as f32 / 255.0) - 0.5;
-        }
-        
-        // Normalize
-        let norm: f32 = data.iter().map(|x| x * x).sum::<f32>().sqrt();
-        if norm > 0.0 {
-            for val in &mut data {
-                *val /= norm;
-            }
-        }
-        
-        Ok(SemanticVector::new(data))
+        let data = self.embedder.embed(text)?;
+        Ok(SemanticVector::from_embedding(data))
+    }
+    
+    /// Vectorize multiple texts in batch (more efficient)
+    pub fn vectorize_batch(&self, texts: &[&str]) -> Result<Vec<SemanticVector>> {
+        let embeddings = self.embedder.embed_batch(texts)?;
+        Ok(embeddings.into_iter().map(SemanticVector::from_embedding).collect())
+    }
+    
+    /// Get the dimensionality of vectors
+    pub fn dimensions(&self) -> usize {
+        self.embedder.dimensions()
+    }
+    
+    /// Get the model name
+    pub fn model_name(&self) -> &str {
+        self.embedder.model_name()
     }
 }
 
 impl Default for Vectorizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Builder for configuring Vectorizer
+pub struct VectorizerBuilder {
+    config: EmbeddingConfig,
+}
+
+impl VectorizerBuilder {
+    /// Create a new builder with default configuration
+    pub fn new() -> Self {
+        Self {
+            config: EmbeddingConfig::default(),
+        }
+    }
+    
+    /// Use ONNX Runtime for local inference
+    #[cfg(feature = "embedding-onnx")]
+    pub fn onnx(mut self, model_path: std::path::PathBuf, max_length: usize) -> Self {
+        self.config = EmbeddingConfig::Onnx { model_path, max_length };
+        self
+    }
+    
+    /// Use HTTP API for remote inference
+    pub fn api(mut self, endpoint: String, model: String, api_key: Option<String>) -> Self {
+        self.config = EmbeddingConfig::Api { endpoint, model, api_key };
+        self
+    }
+    
+    /// Use Mock embedder for testing
+    pub fn mock(mut self, dimensions: usize) -> Self {
+        self.config = EmbeddingConfig::Mock { dimensions };
+        self
+    }
+    
+    /// Build the Vectorizer
+    pub fn build(self) -> Result<Vectorizer> {
+        Vectorizer::from_config(self.config)
+    }
+}
+
+impl Default for VectorizerBuilder {
     fn default() -> Self {
         Self::new()
     }
@@ -96,6 +167,24 @@ mod tests {
         let vec = vectorizer.vectorize("translate English to Chinese").unwrap();
         
         assert_eq!(vec.dimensions, 384);
+        assert_eq!(vectorizer.dimensions(), 384);
+        assert_eq!(vectorizer.model_name(), "mock-embedder");
+    }
+
+    #[test]
+    fn test_vectorize_batch() {
+        let vectorizer = Vectorizer::new();
+        let texts = vec![
+            "translate English to Chinese",
+            "summarize this document",
+            "generate code for sorting",
+        ];
+        let vectors = vectorizer.vectorize_batch(&texts).unwrap();
+        
+        assert_eq!(vectors.len(), 3);
+        for vec in &vectors {
+            assert_eq!(vec.dimensions, 384);
+        }
     }
 
     #[test]
@@ -106,5 +195,45 @@ mod tests {
         
         assert!((vec1.cosine_similarity(&vec2) - 1.0).abs() < 0.001);
         assert!((vec1.cosine_similarity(&vec3) - 0.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_vectorizer_builder_mock() {
+        let vectorizer = VectorizerBuilder::new()
+            .mock(256)
+            .build()
+            .unwrap();
+        
+        assert_eq!(vectorizer.dimensions(), 256);
+    }
+
+    #[test]
+    fn test_vectorizer_builder_default() {
+        let vectorizer = VectorizerBuilder::new()
+            .build()
+            .unwrap();
+        
+        // Default is Mock with 384 dimensions
+        assert_eq!(vectorizer.dimensions(), 384);
+    }
+
+    #[test]
+    fn test_from_embedding() {
+        let data = vec![0.5, 0.3, 0.2, 0.1];
+        let vec = SemanticVector::from_embedding(data.clone());
+        
+        assert_eq!(vec.dimensions, 4);
+        assert_eq!(vec.data, data);
+    }
+
+    #[test]
+    fn test_with_embedder() {
+        let embedder = Arc::new(MockEmbedder::new(512));
+        let vectorizer = Vectorizer::with_embedder(embedder);
+        
+        assert_eq!(vectorizer.dimensions(), 512);
+        
+        let vec = vectorizer.vectorize("test text").unwrap();
+        assert_eq!(vec.dimensions, 512);
     }
 }

@@ -8,6 +8,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Main error type for Nexa-net
 #[derive(Error, Debug)]
 pub enum Error {
+    // Configuration Errors
+    #[error("Configuration error: {0}")]
+    Config(String),
+    
     // Identity Layer Errors
     #[error("DID generation failed: {0}")]
     DidGeneration(String),

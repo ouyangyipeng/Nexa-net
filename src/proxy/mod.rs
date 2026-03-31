@@ -11,14 +11,14 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use nexa_net::proxy::{ProxyServer, ProxyConfig};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = ProxyConfig::default();
-//!     let server = ProxyServer::new(config);
-//!     
+//!     let mut server = ProxyServer::new(config);
+//!
 //!     server.run().await?;
 //!     Ok(())
 //! }

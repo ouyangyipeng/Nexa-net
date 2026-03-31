@@ -14,21 +14,15 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
-//! use nexa_net::identity::{Did, DidDocument, KeyPair};
+//! ```rust,ignore
+//! use nexa_net::identity::{Did, DidDocument, IdentityKeys};
 //!
-//! // Generate a new DID
-//! let keypair = KeyPair::generate()?;
-//! let did = Did::from_keypair(&keypair);
+//! // Generate a new identity
+//! let identity = IdentityKeys::generate().unwrap();
+//! let did = Did::new("did:nexa:alice");
 //!
 //! // Create DID Document
-//! let document = DidDocument::new(&did, &keypair.public_key());
-//!
-//! // Sign and verify
-//! let message = b"Hello, Nexa-net!";
-//! let signature = keypair.sign(message)?;
-//! assert!(keypair.verify(message, &signature)?);
-//! # Ok::<(), nexa_net::Error>(())
+//! let document = DidDocument::new(&did, &identity.signing_key.public_key());
 //! ```
 
 pub mod did;

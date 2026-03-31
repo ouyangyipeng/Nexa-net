@@ -1,0 +1,294 @@
+# Nexa-net Kubernetes Deployment
+# Production-ready configuration
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexa-net
+  labels:
+    app.kubernetes.io/name: nexa-net
+    app.kubernetes.io/component: namespace
+---
+# ConfigMap for Nexa-Proxy
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexa-proxy-config
+  namespace: nexa-net
+  labels:
+    app.kubernetes.io/name: nexa-proxy
+data:
+  config.yaml: |
+    # Nexa-Proxy Configuration
+    server:
+      http:
+        bind: "0.0.0.0:7070"
+      grpc:
+        bind: "0.0.0.0:7071"
+    
+    identity:
+      did_prefix: "did:nexa"
+      key_file: "/var/lib/nexa/keys/signing.key"
+    
+    discovery:
+      supernode_url: "http://nexa-supernode:8080"
+      cache_ttl: 300
+    
+    economy:
+      channel:
+        min_deposit: 100
+        max_deposit: 10000000
+        challenge_period: 3600
+      budget:
+        default_hourly: 10000
+        default_daily: 100000
+    
+    logging:
+      level: "info"
+      format: "json"
+---
+# Secret for Nexa-Proxy keys
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nexa-proxy-secrets
+  namespace: nexa-net
+  labels:
+    app.kubernetes.io/name: nexa-proxy
+type: Opaque
+data:
+  # Base64 encoded placeholder - replace in production
+  signing-key: "REPLACE_WITH_ACTUAL_KEY_BASE64"
+---
+# Nexa-Proxy Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexa-proxy
+  namespace: nexa-net
+  labels:
+    app.kubernetes.io/name: nexa-proxy
+    app.kubernetes.io/component: proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nexa-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nexa-proxy
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: nexa-proxy
+      containers:
+        - name: nexa-proxy
+          image: nexa-net/proxy:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 7070
+              protocol: TCP
+            - name: grpc
+              containerPort: 7071
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: NEXA_PROXY_ENDPOINT
+              value: "0.0.0.0:7070"
+            - name: NEXA_PROXY_GRPC_ENDPOINT
+              value: "0.0.0.0:7071"
+            - name: NEXA_PROXY_METRICS_ENDPOINT
+              value: "0.0.0.0:9090"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nexa
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/nexa
+            - name: logs
+              mountPath: /var/log/nexa
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: config
+          configMap:
+            name: nexa-proxy-config
+        - name: data
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: nexa-proxy
+                topologyKey: kubernetes.io/hostname
+---
+# Nexa-Proxy Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexa-proxy
+  namespace: nexa-net
+  labels:
+    app.kubernetes.io/name: nexa-proxy
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 7070
+      targetPort: http
+      protocol: TCP
+    - name: grpc
+      port: 7071
+      targetPort: grpc
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: nexa-proxy
+---
+# ServiceAccount for Nexa-Proxy
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nexa-proxy
+  namespace: nexa-net
+  labels:
+    app.kubernetes.io/name: nexa-proxy
+---
+# Supernode Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexa-supernode
+  namespace: nexa-net
+  labels:
+    app.kubernetes.io/name: nexa-supernode
+    app.kubernetes.io/component: supernode
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nexa-supernode
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nexa-supernode
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+    spec:
+      serviceAccountName: nexa-supernode
+      containers:
+        - name: supernode
+          image: nexa-net/supernode:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+            - name: metrics
+              containerPort: 9091
+              protocol: TCP
+          env:
+            - name: RUST_LOG
+              value: "info"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: nexa-supernode
+              topologyKey: kubernetes.io/hostname
+---
+# Supernode Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexa-supernode
+  namespace: nexa-net
+  labels:
+    app.kubernetes.io/name: nexa-supernode
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 8443
+      targetPort: https
+      protocol: TCP
+    - name: metrics
+      port: 9091
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: nexa-supernode
+---
+# ServiceAccount for Supernode
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nexa-supernode
+  namespace: nexa-net
+  labels:
+    app.kubernetes.io/name: nexa-supernode

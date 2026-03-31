@@ -53,6 +53,15 @@ http-body-util = "0.1"
 # 存储
 rocksdb = "0.21"
 
+# 持久化存储 (可选)
+sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "json"], optional = true }
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"], optional = true }
+
+# Embedding (可选)
+ort = { version = "2.0.0-rc.12", optional = true }
+ndarray = { version = "0.15", optional = true }
+tokenizers = { version = "0.15", optional = true }
+
 # 日志与监控
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -83,6 +92,13 @@ criterion = { version = "0.5", features = ["async_tokio"] }
 proptest = "1.4"
 tempfile = "3.10"
 
+[features]
+default = []
+embedding-onnx = ["ort", "ndarray", "tokenizers"]
+storage-postgres = ["sqlx"]
+storage-redis = ["redis"]
+storage-full = ["storage-postgres", "storage-redis"]
+
 [[bin]]
 name = "nexa-proxy"
 path = "src/proxy/main.rs"
@@ -100,3 +116,12 @@ strip = true
 [profile.dev]
 opt-level = 0
 debug = true
+
+[profile.bench]
+lto = true
+codegen-units = 1
+opt-level = 3
+
+[[bench]]
+name = "nexa_bench"
+harness = false

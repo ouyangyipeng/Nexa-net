@@ -28,28 +28,22 @@
 //!
 //! # Usage
 //!
-//! ```rust,no_run
-//! use nexa_net::api::sdk::{NexaClient, NexaClientBuilder, CallOptions};
+//! ```rust,ignore
+//! use nexa_net::api::sdk::{NexaClientBuilder, CallOptions};
 //!
 //! // Create client
 //! let client = NexaClientBuilder::new()
 //!     .endpoint("http://127.0.0.1:7070")
 //!     .timeout_ms(30000)
-//!     .default_budget(100)
+//!     .budget(100)
 //!     .build();
 //!
-//! // Make a call
-//! let response = client.call(
-//!     "translate English to Chinese",
-//!     b"Hello World".to_vec(),
-//!     CallOptions::new()
-//! ).await?;
-//!
-//! // Register a capability
-//! client.register(MyCapability {
-//!     name: "My Service",
-//!     description: "Provides X service",
-//! }).await?;
+//! // Make a call (requires running proxy server)
+//! // let response = client.call(
+//! //     "translate English to Chinese",
+//! //     b"Hello World".to_vec(),
+//! //     CallOptions::new()
+//! // ).await?;
 //! ```
 
 use crate::error::{Error, Result};

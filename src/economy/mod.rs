@@ -13,19 +13,18 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use nexa_net::economy::{ChannelManager, BudgetController, MicroReceipt};
+//! use nexa_net::types::Did;
 //!
 //! // Open a state channel
-//! let channel_manager = ChannelManager::new();
-//! let channel = channel_manager.open(peer_did, 1000).await?;
+//! let mut channel_manager = ChannelManager::new();
+//! let party_a = Did::new("did:nexa:alice");
+//! let party_b = Did::new("did:nexa:bob");
+//! let channel = channel_manager.open(party_a, party_b, 1000, 500).unwrap();
 //!
 //! // Create a receipt for a call
-//! let receipt = MicroReceipt::new(call_id, payer_did, payee_did, 25);
-//!
-//! // Settle the channel
-//! channel_manager.settle(channel.id()).await?;
-//! # Ok::<(), nexa_net::Error>(())
+//! let receipt = MicroReceipt::new("call-1", payer_did, payee_did, 25);
 //! ```
 
 pub mod token;

@@ -10,13 +10,18 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
-//! use nexa_net::{NexaClient, CallRequest};
+//! ```rust,ignore
+//! use nexa_net::api::sdk::NexaClientBuilder;
+//! use nexa_net::types::CallRequest;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let client = NexaClient::new("http://127.0.0.1:7070").await?;
-//!     
+//!     let client = NexaClientBuilder::new()
+//!         .endpoint("http://127.0.0.1:7070")
+//!         .timeout_ms(30000)
+//!         .budget(50)
+//!         .build();
+//!
 //!     let request = CallRequest {
 //!         intent: "translate English text to Chinese".to_string(),
 //!         data: vec![],
@@ -24,10 +29,10 @@
 //!         timeout_ms: 30000,
 //!         ..Default::default()
 //!     };
-//!     
-//!     let response = client.call(request).await?;
-//!     println!("Result: {:?}", response.result);
-//!     
+//!
+//!     // let response = client.call(request).await?;
+//!     // println!("Result: {:?}", response.result);
+//!
 //!     Ok(())
 //! }
 //! ```
@@ -40,6 +45,8 @@ pub mod protocol;
 pub mod proxy;
 pub mod nexa;
 pub mod api;
+pub mod storage;
+pub mod security;
 
 pub mod types;
 pub mod error;

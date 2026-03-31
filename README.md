@@ -70,7 +70,11 @@ src/
 ├── discovery/          # Layer 2: 语义发现
 │   ├── capability.rs   # 能力注册表
 │   ├── router.rs       # 多因子语义路由
-│   └── vectorizer.rs   # 语义向量化
+│   ├── vectorizer.rs   # 语义向量化
+│   └── embedding/      # Embedding 模块 (NEW)
+│       ├── mod.rs      # Embedder trait
+│       ├── mock.rs     # Mock Embedder
+│       └── onnx.rs     # ONNX Runtime Embedder
 ├── transport/          # Layer 3: 传输协议
 │   ├── frame.rs        # 12字节帧协议
 │   ├── stream.rs       # 多路复用流
@@ -80,6 +84,14 @@ src/
 │   ├── channel.rs      # 状态通道管理
 │   ├── receipt.rs      # 微交易收据
 │   └── budget.rs       # 预算控制器
+├── storage/            # 持久化存储 (NEW)
+│   ├── mod.rs          # Storage traits
+│   └── memory.rs       # Memory Store
+├── security/           # 安全模块 (NEW)
+│   ├── audit.rs        # 审计日志
+│   ├── key_rotation.rs # 密钥轮换
+│   ├── rate_limit.rs   # 速率限制
+│   └── secure_storage.rs # 加密存储
 ├── proxy/              # Nexa-Proxy 守护进程
 │   ├── server.rs       # REST/gRPC 服务
 │   └── config.rs       # 配置管理
@@ -143,25 +155,42 @@ let routes = client.discover("translation service", 5).await?;
 # 运行所有单元测试
 cargo test --lib
 
+# 运行集成测试
+cargo test
+
+# 运行基准测试
+cargo bench
+
 # 运行特定测试
 cargo test test_rpc_header
-
-# 测试覆盖率
-cargo tarpaulin
 ```
 
-当前测试状态: **94 个测试通过**
+当前测试状态: **130 个单元测试 + 15 个 embedding 测试 + 12 个集成测试全部通过**
+
+## 🔧 Feature Flags
+
+```toml
+# Embedding 支持
+cargo build --features embedding-onnx
+
+# 存储支持
+cargo build --features storage-postgres
+cargo build --features storage-redis
+cargo build --features storage-full
+```
 
 ## 📚 文档
 
 详细设计文档位于 [`docs/`](docs/) 目录：
 
+- [用户指南](docs/USER_GUIDE.md) - 安装与使用指南 ⭐ NEW
 - [架构设计](docs/ARCHITECTURE.md) - 系统整体架构
 - [身份层](docs/IDENTITY_LAYER.md) - DID 与零信任
 - [发现层](docs/DISCOVERY_LAYER.md) - 语义发现与路由
 - [传输层](docs/TRANSPORT_LAYER.md) - 帧协议与 RPC
 - [经济层](docs/ECONOMY_LAYER.md) - 状态通道与微交易
 - [API 参考](docs/API_REFERENCE.md) - 完整 API 文档
+- [安全设计](docs/SECURITY.md) - 安全架构与最佳实践
 
 ## 🤝 贡献
 
