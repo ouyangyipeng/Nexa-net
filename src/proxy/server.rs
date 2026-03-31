@@ -28,12 +28,12 @@
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
 
+use crate::discovery::{CapabilityRegistry, NodeStatusManager, SemanticRouter};
+use crate::economy::{BudgetController, ChannelManager};
 use crate::error::{Error, Result};
+use crate::identity::{DidResolver, IdentityKeys};
 use crate::proxy::config::ProxyConfig;
-use crate::identity::{IdentityKeys, DidResolver};
-use crate::discovery::{CapabilityRegistry, SemanticRouter, NodeStatusManager};
 use crate::transport::{RpcServer, SerializationEngine, SerializationFormat};
-use crate::economy::{ChannelManager, BudgetController};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -63,12 +63,13 @@ impl ProxyState {
         // Create registry and node_status first (they need to be shared without RwLock for router)
         let registry_inner = Arc::new(CapabilityRegistry::new());
         let node_status_inner = Arc::new(NodeStatusManager::new());
-        
+
         // Router uses Arc directly (no RwLock wrapper)
-        let router = Arc::new(RwLock::new(
-            SemanticRouter::with_shared(registry_inner.clone(), node_status_inner.clone())
-        ));
-        
+        let router = Arc::new(RwLock::new(SemanticRouter::with_shared(
+            registry_inner.clone(),
+            node_status_inner.clone(),
+        )));
+
         // Wrap registry and node_status in RwLock for external access
         // Note: We create new RwLock wrappers since the router owns the Arc directly
         let registry = Arc::new(RwLock::new(CapabilityRegistry::new()));
@@ -139,8 +140,11 @@ impl ProxyServer {
 
     /// Run the server
     pub async fn run(&mut self) -> Result<()> {
-        tracing::info!("Starting Nexa-Proxy on {}:{}", 
-            self.config.api_bind, self.config.api_port);
+        tracing::info!(
+            "Starting Nexa-Proxy on {}:{}",
+            self.config.api_bind,
+            self.config.api_port
+        );
 
         // Initialize components
         self.initialize().await?;
@@ -166,7 +170,8 @@ impl ProxyServer {
         tracing::info!("  GET  /balance    - Get balance");
 
         // Wait forever (or until shutdown)
-        tokio::signal::ctrl_c().await
+        tokio::signal::ctrl_c()
+            .await
             .map_err(|e| Error::Internal(format!("Signal error: {}", e)))?;
 
         tracing::info!("Shutdown signal received");
@@ -199,14 +204,14 @@ impl ProxyServer {
     async fn register_handlers(&mut self) -> Result<()> {
         // Note: RPC handlers are registered synchronously
         // The actual async processing happens in handle_frame
-        
+
         // Register call handler (synchronous wrapper)
         self.rpc_server.register("call", |header, _data| {
             // Return RpcResponse with placeholder data
             let response_header = crate::transport::RpcResponseHeader::success(
                 header.call_id,
                 0, // cost
-                1,  // processing_time_ms
+                1, // processing_time_ms
             );
             Ok(crate::transport::RpcResponse {
                 header: response_header,
@@ -216,11 +221,8 @@ impl ProxyServer {
 
         // Register discover handler
         self.rpc_server.register("discover", |header, _data| {
-            let response_header = crate::transport::RpcResponseHeader::success(
-                header.call_id,
-                0,
-                1,
-            );
+            let response_header =
+                crate::transport::RpcResponseHeader::success(header.call_id, 0, 1);
             Ok(crate::transport::RpcResponse {
                 header: response_header,
                 data: br#"{"services": []}"#.to_vec(),
@@ -233,7 +235,7 @@ impl ProxyServer {
     /// Shutdown the server
     pub async fn shutdown(&self) -> Result<()> {
         tracing::info!("Shutting down Nexa-Proxy");
-        
+
         // Close all channels
         let channels = self.state.channels.read().await;
         let stats = channels.stats();
@@ -283,10 +285,7 @@ pub mod handlers {
     use super::*;
 
     /// Handle /call endpoint
-    pub async fn handle_call(
-        state: Arc<ProxyState>,
-        request: CallRequest,
-    ) -> Result<CallResponse> {
+    pub async fn handle_call(state: Arc<ProxyState>, request: CallRequest) -> Result<CallResponse> {
         // Parse intent
         let intent = &request.intent;
         tracing::debug!("Processing call: {}", intent);
@@ -355,14 +354,12 @@ pub mod handlers {
     }
 
     /// Handle /balance endpoint
-    pub async fn handle_get_balance(
-        state: Arc<ProxyState>,
-        did: &str,
-    ) -> Result<BalanceInfo> {
+    pub async fn handle_get_balance(state: Arc<ProxyState>, did: &str) -> Result<BalanceInfo> {
         let channels = state.channels.read().await;
         let peer_channels = channels.list_for_peer(&crate::types::Did::new(did));
 
-        let total_balance: u64 = peer_channels.iter()
+        let total_balance: u64 = peer_channels
+            .iter()
             .map(|c| c.balance_a + c.balance_b)
             .sum();
 

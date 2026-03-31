@@ -3,8 +3,8 @@
 //! A deterministic embedder for testing purposes.
 //! Uses a hash-based approach to generate consistent embeddings for the same text.
 
-use crate::error::Result;
 use super::Embedder;
+use crate::error::Result;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 

@@ -3,13 +3,13 @@
 //! Default storage backend using in-memory data structures.
 //! Suitable for testing and single-node deployments without persistence requirements.
 
-use crate::types::{CapabilitySchema, Did};
-use crate::economy::{Channel, MicroReceipt};
 use super::{StorageError, StorageResult};
+use crate::economy::{Channel, MicroReceipt};
+use crate::types::{CapabilitySchema, Did};
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::{DateTime, Utc};
 
 /// Memory store configuration
 #[derive(Debug, Clone)]
@@ -92,48 +92,54 @@ impl MemoryStore {
     /// Register a capability
     pub async fn register_capability(&self, schema: CapabilitySchema) -> StorageResult<()> {
         let mut caps = self.capabilities.write().await;
-        
+
         let did_str = schema.metadata.did.to_string();
-        
+
         if caps.contains_key(&did_str) {
             return Err(StorageError::Conflict(format!(
-                "Capability already registered: {}", did_str
+                "Capability already registered: {}",
+                did_str
             )));
         }
-        
+
         // Check capacity
         if caps.len() >= self.config.max_capabilities {
             // Remove oldest entry
-            if let Some(oldest_key) = caps.iter()
+            if let Some(oldest_key) = caps
+                .iter()
                 .min_by_key(|(_, c)| c.registered_at)
                 .map(|(k, _)| k.clone())
             {
                 caps.remove(&oldest_key);
             }
         }
-        
+
         let now = Utc::now();
-        caps.insert(did_str, StoredCapability {
-            schema,
-            quality: serde_json::json!({}),
-            available: true,
-            registered_at: now,
-            updated_at: now,
-        });
-        
+        caps.insert(
+            did_str,
+            StoredCapability {
+                schema,
+                quality: serde_json::json!({}),
+                available: true,
+                registered_at: now,
+                updated_at: now,
+            },
+        );
+
         Ok(())
     }
 
     /// Unregister a capability
     pub async fn unregister_capability(&self, did: &str) -> StorageResult<()> {
         let mut caps = self.capabilities.write().await;
-        
+
         if caps.remove(did).is_none() {
             return Err(StorageError::NotFound(format!(
-                "Capability not found: {}", did
+                "Capability not found: {}",
+                did
             )));
         }
-        
+
         Ok(())
     }
 
@@ -150,41 +156,55 @@ impl MemoryStore {
     }
 
     /// Update capability availability
-    pub async fn set_capability_availability(&self, did: &str, available: bool) -> StorageResult<()> {
+    pub async fn set_capability_availability(
+        &self,
+        did: &str,
+        available: bool,
+    ) -> StorageResult<()> {
         let mut caps = self.capabilities.write().await;
-        
+
         if let Some(cap) = caps.get_mut(did) {
             cap.available = available;
             cap.updated_at = Utc::now();
             Ok(())
         } else {
-            Err(StorageError::NotFound(format!("Capability not found: {}", did)))
+            Err(StorageError::NotFound(format!(
+                "Capability not found: {}",
+                did
+            )))
         }
     }
 
     /// Update capability quality metrics
-    pub async fn update_capability_quality(&self, did: &str, quality: serde_json::Value) -> StorageResult<()> {
+    pub async fn update_capability_quality(
+        &self,
+        did: &str,
+        quality: serde_json::Value,
+    ) -> StorageResult<()> {
         let mut caps = self.capabilities.write().await;
-        
+
         if let Some(cap) = caps.get_mut(did) {
             cap.quality = quality;
             cap.updated_at = Utc::now();
             Ok(())
         } else {
-            Err(StorageError::NotFound(format!("Capability not found: {}", did)))
+            Err(StorageError::NotFound(format!(
+                "Capability not found: {}",
+                did
+            )))
         }
     }
 
     /// Find capabilities by tags
-    pub async fn find_capabilities_by_tags(&self, tags: &[String]) -> StorageResult<Vec<StoredCapability>> {
+    pub async fn find_capabilities_by_tags(
+        &self,
+        tags: &[String],
+    ) -> StorageResult<Vec<StoredCapability>> {
         let caps = self.capabilities.read().await;
-        
-        Ok(caps.values()
-            .filter(|c| {
-                tags.iter().all(|tag| {
-                    c.schema.metadata.tags.contains(tag)
-                })
-            })
+
+        Ok(caps
+            .values()
+            .filter(|c| tags.iter().all(|tag| c.schema.metadata.tags.contains(tag)))
             .cloned()
             .collect())
     }
@@ -195,24 +215,26 @@ impl MemoryStore {
     /// Store a channel
     pub async fn store_channel(&self, channel: Channel) -> StorageResult<()> {
         let mut channels = self.channels.write().await;
-        
+
         let channel_id = channel.id.clone();
-        
+
         // Check capacity
         if channels.len() >= self.config.max_channels && !channels.contains_key(&channel_id) {
             // Remove closed channels first
-            let closed_keys: Vec<_> = channels.iter()
+            let closed_keys: Vec<_> = channels
+                .iter()
                 .filter(|(_, c)| c.channel.is_closed())
                 .map(|(k, _)| k.clone())
                 .collect();
-            
+
             for key in closed_keys {
                 channels.remove(&key);
             }
-            
+
             // If still at capacity, remove oldest
             if channels.len() >= self.config.max_channels {
-                if let Some(oldest_key) = channels.iter()
+                if let Some(oldest_key) = channels
+                    .iter()
                     .min_by_key(|(_, c)| c.created_at)
                     .map(|(k, _)| k.clone())
                 {
@@ -220,14 +242,17 @@ impl MemoryStore {
                 }
             }
         }
-        
+
         let now = Utc::now();
-        channels.insert(channel_id, StoredChannel {
-            channel,
-            created_at: now,
-            updated_at: now,
-        });
-        
+        channels.insert(
+            channel_id,
+            StoredChannel {
+                channel,
+                created_at: now,
+                updated_at: now,
+            },
+        );
+
         Ok(())
     }
 
@@ -240,21 +265,25 @@ impl MemoryStore {
     /// Update a channel
     pub async fn update_channel(&self, channel: Channel) -> StorageResult<()> {
         let mut channels = self.channels.write().await;
-        
+
         let channel_id = channel.id.clone();
         if let Some(stored) = channels.get_mut(&channel_id) {
             stored.channel = channel;
             stored.updated_at = Utc::now();
             Ok(())
         } else {
-            Err(StorageError::NotFound(format!("Channel not found: {}", channel_id)))
+            Err(StorageError::NotFound(format!(
+                "Channel not found: {}",
+                channel_id
+            )))
         }
     }
 
     /// List all open channels
     pub async fn list_open_channels(&self) -> StorageResult<Vec<StoredChannel>> {
         let channels = self.channels.read().await;
-        Ok(channels.values()
+        Ok(channels
+            .values()
             .filter(|c| !c.channel.is_closed())
             .cloned()
             .collect())
@@ -263,7 +292,8 @@ impl MemoryStore {
     /// List channels for a peer
     pub async fn list_channels_for_peer(&self, did: &Did) -> StorageResult<Vec<StoredChannel>> {
         let channels = self.channels.read().await;
-        Ok(channels.values()
+        Ok(channels
+            .values()
             .filter(|c| c.channel.party_a == *did || c.channel.party_b == *did)
             .cloned()
             .collect())
@@ -272,11 +302,14 @@ impl MemoryStore {
     /// Remove a channel
     pub async fn remove_channel(&self, channel_id: &str) -> StorageResult<()> {
         let mut channels = self.channels.write().await;
-        
+
         if channels.remove(channel_id).is_none() {
-            return Err(StorageError::NotFound(format!("Channel not found: {}", channel_id)));
+            return Err(StorageError::NotFound(format!(
+                "Channel not found: {}",
+                channel_id
+            )));
         }
-        
+
         Ok(())
     }
 }
@@ -286,7 +319,7 @@ impl MemoryStore {
     /// Store a receipt
     pub async fn store_receipt(&self, receipt: MicroReceipt) -> StorageResult<()> {
         let mut receipts = self.receipts.write().await;
-        
+
         // Check capacity
         if receipts.len() >= self.config.max_receipts {
             // Remove oldest receipts
@@ -294,30 +327,38 @@ impl MemoryStore {
             let remove_count = receipts.len() / 10; // Remove 10%
             receipts.drain(0..remove_count);
         }
-        
+
         receipts.push(StoredReceipt {
             receipt,
             created_at: Utc::now(),
         });
-        
+
         Ok(())
     }
 
     /// Get receipts for a payer
-    pub async fn get_receipts_for_payer(&self, payer_did: &Did) -> StorageResult<Vec<StoredReceipt>> {
+    pub async fn get_receipts_for_payer(
+        &self,
+        payer_did: &Did,
+    ) -> StorageResult<Vec<StoredReceipt>> {
         let receipts = self.receipts.read().await;
         let payer_str = payer_did.to_string();
-        Ok(receipts.iter()
+        Ok(receipts
+            .iter()
             .filter(|r| r.receipt.payer == payer_str)
             .cloned()
             .collect())
     }
 
     /// Get receipts for a payee
-    pub async fn get_receipts_for_payee(&self, payee_did: &Did) -> StorageResult<Vec<StoredReceipt>> {
+    pub async fn get_receipts_for_payee(
+        &self,
+        payee_did: &Did,
+    ) -> StorageResult<Vec<StoredReceipt>> {
         let receipts = self.receipts.read().await;
         let payee_str = payee_did.to_string();
-        Ok(receipts.iter()
+        Ok(receipts
+            .iter()
             .filter(|r| r.receipt.payee == payee_str)
             .cloned()
             .collect())
@@ -326,7 +367,8 @@ impl MemoryStore {
     /// Get receipts for a call
     pub async fn get_receipts_for_call(&self, call_id: &str) -> StorageResult<Vec<StoredReceipt>> {
         let receipts = self.receipts.read().await;
-        Ok(receipts.iter()
+        Ok(receipts
+            .iter()
             .filter(|r| r.receipt.call_id == call_id)
             .cloned()
             .collect())
@@ -345,7 +387,7 @@ impl MemoryStore {
     /// Get a cached value
     pub async fn cache_get(&self, key: &str) -> StorageResult<Option<serde_json::Value>> {
         let cache = self.cache.read().await;
-        
+
         if let Some((value, timestamp)) = cache.get(key) {
             // Check TTL
             let elapsed = (Utc::now() - *timestamp).num_seconds() as u64;
@@ -353,7 +395,7 @@ impl MemoryStore {
                 return Ok(Some(value.clone()));
             }
         }
-        
+
         Ok(None)
     }
 
@@ -369,17 +411,18 @@ impl MemoryStore {
         let mut cache = self.cache.write().await;
         let now = Utc::now();
         let ttl = self.config.cache_ttl_seconds as i64;
-        
-        let expired: Vec<_> = cache.iter()
+
+        let expired: Vec<_> = cache
+            .iter()
             .filter(|(_, (_, ts))| (now - *ts).num_seconds() > ttl)
             .map(|(k, _)| k.clone())
             .collect();
-        
+
         let count = expired.len();
         for key in expired {
             cache.remove(&key);
         }
-        
+
         Ok(count)
     }
 }
@@ -392,7 +435,7 @@ impl MemoryStore {
         let channels = self.channels.read().await;
         let receipts = self.receipts.read().await;
         let cache = self.cache.read().await;
-        
+
         StorageStats {
             capabilities_count: caps.len(),
             channels_count: channels.len(),
@@ -420,7 +463,7 @@ pub struct StorageStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{ServiceMetadata, EndpointDefinition};
+    use crate::types::{EndpointDefinition, ServiceMetadata};
 
     fn create_test_schema(did: &str, name: &str) -> CapabilitySchema {
         CapabilitySchema {
@@ -438,22 +481,22 @@ mod tests {
     #[tokio::test]
     async fn test_capability_storage() {
         let store = MemoryStore::default_store();
-        
+
         let did = Did::new("did:nexa:test123");
         let schema = create_test_schema("did:nexa:test123", "test-service");
-        
+
         // Register
         store.register_capability(schema.clone()).await.unwrap();
-        
+
         // Get
         let cap = store.get_capability(&did.to_string()).await.unwrap();
         assert!(cap.is_some());
         assert_eq!(cap.unwrap().schema.metadata.name, "test-service");
-        
+
         // List
         let caps = store.list_capabilities().await.unwrap();
         assert_eq!(caps.len(), 1);
-        
+
         // Unregister
         store.unregister_capability(&did.to_string()).await.unwrap();
         let cap = store.get_capability(&did.to_string()).await.unwrap();
@@ -463,18 +506,18 @@ mod tests {
     #[tokio::test]
     async fn test_channel_storage() {
         let store = MemoryStore::default_store();
-        
+
         let party_a = Did::new("did:nexa:party_a");
         let party_b = Did::new("did:nexa:party_b");
         let channel = Channel::new("channel-1", party_a, party_b, 1000, 500);
-        
+
         // Store
         store.store_channel(channel.clone()).await.unwrap();
-        
+
         // Get
         let stored = store.get_channel("channel-1").await.unwrap();
         assert!(stored.is_some());
-        
+
         // List open
         let open = store.list_open_channels().await.unwrap();
         assert_eq!(open.len(), 1);
@@ -483,17 +526,17 @@ mod tests {
     #[tokio::test]
     async fn test_cache_operations() {
         let store = MemoryStore::default_store();
-        
+
         let value = serde_json::json!({"key": "value"});
-        
+
         // Set
         store.cache_set("test-key", value.clone()).await.unwrap();
-        
+
         // Get
         let cached = store.cache_get("test-key").await.unwrap();
         assert!(cached.is_some());
         assert_eq!(cached.unwrap(), value);
-        
+
         // Delete
         store.cache_delete("test-key").await.unwrap();
         let cached = store.cache_get("test-key").await.unwrap();
@@ -503,7 +546,7 @@ mod tests {
     #[tokio::test]
     async fn test_storage_stats() {
         let store = MemoryStore::default_store();
-        
+
         let stats = store.stats().await;
         assert_eq!(stats.capabilities_count, 0);
         assert_eq!(stats.channels_count, 0);

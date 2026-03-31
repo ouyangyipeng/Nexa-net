@@ -24,7 +24,7 @@
 //! ```
 
 use crate::error::{Error, Result};
-use crate::types::{CapabilitySchema, EndpointDefinition, ServiceMetadata};
+use crate::types::{CapabilitySchema, EndpointDefinition};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -215,7 +215,7 @@ impl CapabilityRegistry {
             stale_timeout: Duration::from_secs(3600),
         }
     }
-    
+
     /// Default implementation
     fn default() -> Self {
         Self::new()
@@ -236,9 +236,12 @@ impl CapabilityRegistry {
         let did = schema.metadata.did.as_str().to_string();
 
         // Check if we're at capacity
-        if !self.capabilities.contains_key(&did) && self.capabilities.len() >= self.max_capabilities {
+        if !self.capabilities.contains_key(&did) && self.capabilities.len() >= self.max_capabilities
+        {
             // Remove oldest capability
-            if let Some((oldest_did, _)) = self.capabilities.iter()
+            if let Some((oldest_did, _)) = self
+                .capabilities
+                .iter()
                 .min_by_key(|(_, cap)| cap.registered_at)
             {
                 let oldest_did = oldest_did.clone();
@@ -322,7 +325,8 @@ impl CapabilityRegistry {
 
     /// Find available capabilities
     pub fn find_available(&self) -> Vec<&CapabilitySchema> {
-        self.capabilities.values()
+        self.capabilities
+            .values()
             .filter(|r| r.available)
             .map(|r| &r.schema)
             .collect()
@@ -330,7 +334,8 @@ impl CapabilityRegistry {
 
     /// Find capabilities with quality above threshold
     pub fn find_by_quality(&self, min_success_rate: f32) -> Vec<&CapabilitySchema> {
-        self.capabilities.values()
+        self.capabilities
+            .values()
             .filter(|r| r.quality.success_rate >= min_success_rate)
             .map(|r| &r.schema)
             .collect()
@@ -338,7 +343,9 @@ impl CapabilityRegistry {
 
     /// Update capability availability
     pub fn set_availability(&mut self, did: &str, available: bool) -> Result<()> {
-        let cap = self.capabilities.get_mut(did)
+        let cap = self
+            .capabilities
+            .get_mut(did)
             .ok_or_else(|| Error::ServiceNotFound(did.to_string()))?;
         cap.set_available(available);
         Ok(())
@@ -346,7 +353,9 @@ impl CapabilityRegistry {
 
     /// Update capability quality metrics
     pub fn update_quality(&mut self, did: &str, quality: QualityMetrics) -> Result<()> {
-        let cap = self.capabilities.get_mut(did)
+        let cap = self
+            .capabilities
+            .get_mut(did)
             .ok_or_else(|| Error::ServiceNotFound(did.to_string()))?;
         cap.update_quality(quality);
         Ok(())
@@ -354,15 +363,24 @@ impl CapabilityRegistry {
 
     /// Set semantic vector for a capability
     pub fn set_vector(&mut self, did: &str, vector: Vec<f32>) -> Result<()> {
-        let cap = self.capabilities.get_mut(did)
+        let cap = self
+            .capabilities
+            .get_mut(did)
             .ok_or_else(|| Error::ServiceNotFound(did.to_string()))?;
         cap.set_vector(vector);
         Ok(())
     }
 
     /// Set endpoint vector for a capability
-    pub fn set_endpoint_vector(&mut self, did: &str, endpoint_id: &str, vector: Vec<f32>) -> Result<()> {
-        let cap = self.capabilities.get_mut(did)
+    pub fn set_endpoint_vector(
+        &mut self,
+        did: &str,
+        endpoint_id: &str,
+        vector: Vec<f32>,
+    ) -> Result<()> {
+        let cap = self
+            .capabilities
+            .get_mut(did)
             .ok_or_else(|| Error::ServiceNotFound(did.to_string()))?;
         cap.set_endpoint_vector(endpoint_id.to_string(), vector);
         Ok(())
@@ -370,7 +388,9 @@ impl CapabilityRegistry {
 
     /// Clean up stale capabilities
     pub fn cleanup_stale(&mut self) -> Vec<String> {
-        let stale_dids: Vec<String> = self.capabilities.iter()
+        let stale_dids: Vec<String> = self
+            .capabilities
+            .iter()
             .filter(|(_, cap)| cap.stale_time() > self.stale_timeout)
             .map(|(did, _)| did.clone())
             .collect();
@@ -386,9 +406,12 @@ impl CapabilityRegistry {
     pub fn stats(&self) -> RegistryStats {
         let total = self.capabilities.len();
         let available = self.capabilities.values().filter(|c| c.available).count();
-        let avg_quality = self.capabilities.values()
+        let avg_quality = self
+            .capabilities
+            .values()
             .map(|c| c.quality.success_rate)
-            .sum::<f32>() / total.max(1) as f32;
+            .sum::<f32>()
+            / total.max(1) as f32;
 
         RegistryStats {
             total_capabilities: total,
@@ -415,7 +438,7 @@ pub struct RegistryStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Did;
+    use crate::types::{Did, ServiceMetadata};
 
     fn create_test_schema(did: &str, name: &str, tags: Vec<&str>) -> CapabilitySchema {
         CapabilitySchema {
@@ -443,9 +466,27 @@ mod tests {
     fn test_find_by_tags() {
         let mut registry = CapabilityRegistry::new();
 
-        registry.register(create_test_schema("did:nexa:svc1", "Service 1", vec!["translation", "nlp"])).unwrap();
-        registry.register(create_test_schema("did:nexa:svc2", "Service 2", vec!["translation", "document"])).unwrap();
-        registry.register(create_test_schema("did:nexa:svc3", "Service 3", vec!["image", "vision"])).unwrap();
+        registry
+            .register(create_test_schema(
+                "did:nexa:svc1",
+                "Service 1",
+                vec!["translation", "nlp"],
+            ))
+            .unwrap();
+        registry
+            .register(create_test_schema(
+                "did:nexa:svc2",
+                "Service 2",
+                vec!["translation", "document"],
+            ))
+            .unwrap();
+        registry
+            .register(create_test_schema(
+                "did:nexa:svc3",
+                "Service 3",
+                vec!["image", "vision"],
+            ))
+            .unwrap();
 
         let results = registry.find_by_tags(&["translation".to_string()]);
         assert_eq!(results.len(), 2);
@@ -454,7 +495,9 @@ mod tests {
     #[test]
     fn test_availability() {
         let mut registry = CapabilityRegistry::new();
-        registry.register(create_test_schema("did:nexa:test", "Test", vec!["test"])).unwrap();
+        registry
+            .register(create_test_schema("did:nexa:test", "Test", vec!["test"]))
+            .unwrap();
 
         registry.set_availability("did:nexa:test", false).unwrap();
 
@@ -465,12 +508,19 @@ mod tests {
     #[test]
     fn test_quality_filtering() {
         let mut registry = CapabilityRegistry::new();
-        registry.register(create_test_schema("did:nexa:test", "Test", vec!["test"])).unwrap();
+        registry
+            .register(create_test_schema("did:nexa:test", "Test", vec!["test"]))
+            .unwrap();
 
-        registry.update_quality("did:nexa:test", QualityMetrics {
-            success_rate: 0.8,
-            ..Default::default()
-        }).unwrap();
+        registry
+            .update_quality(
+                "did:nexa:test",
+                QualityMetrics {
+                    success_rate: 0.8,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         let high_quality = registry.find_by_quality(0.9);
         assert!(high_quality.is_empty());
@@ -482,8 +532,20 @@ mod tests {
     #[test]
     fn test_registry_stats() {
         let mut registry = CapabilityRegistry::new();
-        registry.register(create_test_schema("did:nexa:svc1", "Service 1", vec!["a", "b"])).unwrap();
-        registry.register(create_test_schema("did:nexa:svc2", "Service 2", vec!["b", "c"])).unwrap();
+        registry
+            .register(create_test_schema(
+                "did:nexa:svc1",
+                "Service 1",
+                vec!["a", "b"],
+            ))
+            .unwrap();
+        registry
+            .register(create_test_schema(
+                "did:nexa:svc2",
+                "Service 2",
+                vec!["b", "c"],
+            ))
+            .unwrap();
 
         let stats = registry.stats();
         assert_eq!(stats.total_capabilities, 2);

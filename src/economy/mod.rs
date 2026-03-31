@@ -27,18 +27,18 @@
 //! let receipt = MicroReceipt::new("call-1", payer_did, payee_did, 25);
 //! ```
 
-pub mod token;
+pub mod budget;
 pub mod channel;
 pub mod receipt;
-pub mod budget;
 pub mod settlement;
+pub mod token;
 
 // Re-exports
-pub use token::{TokenEngine, TokenBalance, TokenAmount};
-pub use channel::{ChannelManager, Channel, ChannelId};
-pub use receipt::{MicroReceipt, ReceiptSigner, ReceiptVerifier};
 pub use budget::{BudgetController, BudgetLimit, BudgetStatus};
-pub use settlement::{SettlementEngine, Settlement, Dispute};
+pub use channel::{Channel, ChannelId, ChannelManager};
+pub use receipt::{MicroReceipt, ReceiptSigner, ReceiptVerifier};
+pub use settlement::{Dispute, Settlement, SettlementEngine};
+pub use token::{TokenAmount, TokenBalance, TokenEngine};
 
 // Re-export from types
 pub use crate::types::ChannelState;

@@ -2,8 +2,8 @@
 //!
 //! Tracks health and load of network nodes.
 
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 
 /// Node status information
 #[derive(Debug, Clone)]
@@ -37,7 +37,7 @@ impl NodeStatus {
             failed_calls: 0,
         }
     }
-    
+
     /// Get success rate
     pub fn success_rate(&self) -> f32 {
         if self.total_calls == 0 {
@@ -59,20 +59,21 @@ impl NodeStatusManager {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Update node status
     pub fn update(&mut self, status: NodeStatus) {
         self.statuses.insert(status.did.clone(), status);
     }
-    
+
     /// Get node status
     pub fn get(&self, did: &str) -> Option<&NodeStatus> {
         self.statuses.get(did)
     }
-    
+
     /// Check if node is healthy
     pub fn is_healthy(&self, did: &str) -> bool {
-        self.statuses.get(did)
+        self.statuses
+            .get(did)
             .map(|s| s.online && s.success_rate() > 0.9)
             .unwrap_or(false)
     }
@@ -93,7 +94,7 @@ mod tests {
     fn test_status_manager() {
         let mut manager = NodeStatusManager::new();
         let status = NodeStatus::new("did:nexa:test");
-        
+
         manager.update(status);
         assert!(manager.is_healthy("did:nexa:test"));
     }

@@ -19,11 +19,11 @@
 //! | `flow` | Network topology |
 //! | `@budget` | State channel budget |
 
-pub mod runtime;
 pub mod dag_executor;
 pub mod network_bridge;
+pub mod runtime;
 
 // Re-exports
-pub use runtime::AvmRuntime;
 pub use dag_executor::{DagExecutor, DagNode, DagOperator};
 pub use network_bridge::NetworkBridge;
+pub use runtime::AvmRuntime;

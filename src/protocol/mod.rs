@@ -6,11 +6,11 @@
 // Note: These will be generated from proto files
 // For now, we define placeholder types
 
-pub mod message;
-pub mod identity;
 pub mod discovery;
-pub mod transport;
 pub mod economy;
+pub mod identity;
+pub mod message;
+pub mod transport;
 
 // Re-exports
-pub use message::{NexaMessage, MessageHeader, MessageSignature};
+pub use message::{MessageHeader, MessageSignature, NexaMessage};

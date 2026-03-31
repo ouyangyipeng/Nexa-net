@@ -4,8 +4,8 @@
 //! Supports models like all-MiniLM-L6-v2, paraphrase-multilingual-MiniLM-L12-v2, etc.
 //! Integrates proper tokenization via the `tokenizers` crate.
 
-use crate::error::{Error, Result};
 use super::Embedder;
+use crate::error::{Error, Result};
 
 #[cfg(feature = "embedding-onnx")]
 use ort::{GraphOptimizationLevel, Session};
@@ -178,7 +178,8 @@ impl OnnxEmbedder {
         use tokenizers::TruncationOptions;
 
         // Configure truncation and padding
-        let tokenizer = self.tokenizer
+        let tokenizer = self
+            .tokenizer
             .with_truncation(Some(TruncationOptions {
                 max_length: self.max_length,
                 stride: 0,
@@ -194,7 +195,11 @@ impl OnnxEmbedder {
             .unwrap_or_else(|_| tokenizers::Encoding::default());
 
         let input_ids: Vec<i64> = encoding.get_ids().iter().map(|id| *id as i64).collect();
-        let attention_mask: Vec<i64> = encoding.get_attention_mask().iter().map(|m| *m as i64).collect();
+        let attention_mask: Vec<i64> = encoding
+            .get_attention_mask()
+            .iter()
+            .map(|m| *m as i64)
+            .collect();
 
         (input_ids, attention_mask)
     }
@@ -222,15 +227,19 @@ impl Embedder for OnnxEmbedder {
         // Run inference
         let outputs = self
             .session
-            .run(inputs![
-                "input_ids" => input_ids.view(),
-                "attention_mask" => attention_mask_arr.view()
-            ].map_err(|e| Error::Internal(format!("Failed to create inputs: {}", e)))?)
+            .run(
+                inputs![
+                    "input_ids" => input_ids.view(),
+                    "attention_mask" => attention_mask_arr.view()
+                ]
+                .map_err(|e| Error::Internal(format!("Failed to create inputs: {}", e)))?,
+            )
             .map_err(|e| Error::Internal(format!("ONNX inference failed: {}", e)))?;
 
         // Extract the embedding (mean pooling over sequence dimension)
         // Output shape: [1, seq_len, hidden_size]
-        let output = outputs[0].try_extract_tensor::<f32>()
+        let output = outputs[0]
+            .try_extract_tensor::<f32>()
             .map_err(|e| Error::Internal(format!("Failed to extract output: {}", e)))?;
 
         let shape = output.shape();
@@ -372,14 +381,19 @@ mod tests {
             let embedder = OnnxEmbedder::new(model_path, 512).unwrap();
 
             let emb1 = embedder.embed("translate English to Chinese").unwrap();
-            let emb2 = embedder.embed("translation from English to Chinese").unwrap();
+            let emb2 = embedder
+                .embed("translation from English to Chinese")
+                .unwrap();
             let emb3 = embedder.embed("weather forecast tomorrow").unwrap();
 
             // Similar texts should have higher similarity
             let sim12 = super::super::utils::cosine_similarity(&emb1, &emb2);
             let sim13 = super::super::utils::cosine_similarity(&emb1, &emb3);
 
-            assert!(sim12 > sim13, "Similar texts should have higher cosine similarity");
+            assert!(
+                sim12 > sim13,
+                "Similar texts should have higher cosine similarity"
+            );
         }
     }
 }

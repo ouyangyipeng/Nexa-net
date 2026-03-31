@@ -12,7 +12,13 @@ pub mod redis;
 pub mod memory;
 
 // Re-export common types
-pub use memory::{MemoryStore, MemoryConfig};
+pub use memory::{MemoryConfig, MemoryStore};
+
+#[cfg(feature = "storage-postgres")]
+pub use postgres::{PostgresConfig, PostgresStore};
+
+#[cfg(feature = "storage-redis")]
+pub use redis::{RedisConfig, RedisStore};
 
 /// Storage configuration
 #[derive(Debug, Clone)]
@@ -20,11 +26,11 @@ pub struct StorageConfig {
     /// PostgreSQL connection URL (if enabled)
     #[cfg(feature = "storage-postgres")]
     pub postgres_url: Option<String>,
-    
+
     /// Redis connection URL (if enabled)
     #[cfg(feature = "storage-redis")]
     pub redis_url: Option<String>,
-    
+
     /// Memory store configuration (fallback)
     pub memory: MemoryConfig,
 }
@@ -34,10 +40,10 @@ impl Default for StorageConfig {
         Self {
             #[cfg(feature = "storage-postgres")]
             postgres_url: None,
-            
+
             #[cfg(feature = "storage-redis")]
             redis_url: None,
-            
+
             memory: MemoryConfig::default(),
         }
     }
@@ -48,22 +54,22 @@ impl Default for StorageConfig {
 pub enum StorageError {
     #[error("Connection error: {0}")]
     Connection(String),
-    
+
     #[error("Query error: {0}")]
     Query(String),
-    
+
     #[error("Serialization error: {0}")]
     Serialization(String),
-    
+
     #[error("Not found: {0}")]
     NotFound(String),
-    
+
     #[error("Conflict: {0}")]
     Conflict(String),
-    
+
     #[error("Timeout: {0}")]
     Timeout(String),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }

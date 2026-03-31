@@ -37,19 +37,19 @@
 //! }
 //! ```
 
-pub mod identity;
+pub mod api;
 pub mod discovery;
-pub mod transport;
 pub mod economy;
+pub mod identity;
+pub mod nexa;
 pub mod protocol;
 pub mod proxy;
-pub mod nexa;
-pub mod api;
-pub mod storage;
 pub mod security;
+pub mod storage;
+pub mod transport;
 
-pub mod types;
 pub mod error;
+pub mod types;
 
 // Re-exports for convenience
 pub use error::{Error, Result};

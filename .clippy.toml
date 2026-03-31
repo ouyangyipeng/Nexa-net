@@ -1,0 +1,45 @@
+# Clippy configuration
+# See https://rust-lang.github.io/rust-clippy/master/index.html
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 25
+
+# Maximum number of lines in a function
+too-many-lines-threshold = 100
+
+# Maximum number of arguments in a function
+too-many-arguments-threshold = 7
+
+# Type complexity threshold
+type-complexity-threshold = 250
+
+# Single character binding names to allow
+single-char-binding-names-threshold = 4
+
+# Doc valid identifier regex
+doc-valid-idents = [
+    "NexaDID",
+    "NexaToken",
+    "NexaProxy",
+    "AccessKit",
+    "CoreFoundation",
+    "CoreGraphics",
+    "CoreText",
+    "DevTools",
+    "Direct2D",
+    "Direct3D",
+    "DirectWrite",
+    "DirectX",
+    "ECMAScript",
+    "OpenAL",
+    "OpenDNS",
+    "OpenGL",
+    "OpenSSH",
+    "OpenSSL",
+    "OpenType",
+    "WebGL",
+    "WebGPU",
+    "WebRTC",
+    "WebSocket",
+    "ZeroTier",
+]

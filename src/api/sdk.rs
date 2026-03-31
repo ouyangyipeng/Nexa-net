@@ -46,13 +46,11 @@
 //! // ).await?;
 //! ```
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::types::{
-    CallRequest, CallResponse, CallStatus, CallResult, CallError,
-    CapabilitySchema, Route, RouteContext, Did,
+    CallRequest, CallResponse, CallResult, CallStatus, CapabilitySchema, Did, Route,
 };
 use std::collections::HashMap;
-use std::time::Duration;
 
 /// Nexa client for SDK users
 pub struct NexaClient {
@@ -131,11 +129,7 @@ impl NexaClient {
     }
 
     /// Discover services matching an intent
-    pub async fn discover(
-        &self,
-        intent: &str,
-        max_results: usize,
-    ) -> Result<Vec<Route>> {
+    pub async fn discover(&self, intent: &str, max_results: usize) -> Result<Vec<Route>> {
         // Placeholder - would POST to /api/v1/discover
         tracing::debug!("Discovering for intent: {}", intent);
         Ok(vec![])

@@ -312,10 +312,11 @@ impl Frame {
         let payload_end = payload_start + header.length as usize;
 
         if data.len() < payload_end {
-            return Err(Error::Protocol(
-                format!("Frame payload truncated: expected {} bytes, got {}", 
-                    payload_end, data.len())
-            ));
+            return Err(Error::Protocol(format!(
+                "Frame payload truncated: expected {} bytes, got {}",
+                payload_end,
+                data.len()
+            )));
         }
 
         let payload = data[payload_start..payload_end].to_vec();
@@ -368,11 +369,11 @@ impl<R: Read> FrameReader<R> {
         // Read header
         let mut header_buf = [0u8; FrameHeader::SIZE];
         let bytes_read = self.reader.read(&mut header_buf)?;
-        
+
         if bytes_read == 0 {
             return Ok(None); // EOF
         }
-        
+
         if bytes_read < FrameHeader::SIZE {
             return Err(Error::Protocol("Incomplete frame header".to_string()));
         }
@@ -443,10 +444,10 @@ mod tests {
     fn test_frame_encode_decode() {
         let payload = b"test payload".to_vec();
         let frame = Frame::data(1, payload.clone(), true);
-        
+
         let encoded = frame.encode();
         let decoded = Frame::decode(&encoded).unwrap();
-        
+
         assert_eq!(decoded.header.frame_type, FrameType::Data);
         assert_eq!(decoded.header.stream_id, 1);
         assert!(decoded.is_compressed());
@@ -469,7 +470,7 @@ mod tests {
         let frame = Frame::window_update(1, 1024);
         assert_eq!(frame.header.frame_type, FrameType::WindowUpdate);
         assert_eq!(frame.header.stream_id, 1);
-        
+
         let increment = u32::from_be_bytes([
             frame.payload[0],
             frame.payload[1],

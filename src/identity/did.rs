@@ -4,7 +4,7 @@
 
 use crate::error::{Error, Result};
 use crate::types::Did as DidType;
-use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use ed25519_dalek::VerifyingKey;
 use sha2::{Digest, Sha256};
 
 /// DID identifier with associated key material
@@ -24,7 +24,7 @@ impl Did {
             identifier: format!("did:nexa:{}", identifier),
         }
     }
-    
+
     /// Parse a DID string
     pub fn parse(did: &str) -> Result<Self> {
         if !did.starts_with("did:nexa:") {
@@ -34,12 +34,12 @@ impl Did {
             identifier: did.to_string(),
         })
     }
-    
+
     /// Get the DID string
     pub fn as_str(&self) -> &str {
         &self.identifier
     }
-    
+
     /// Get the method-specific identifier (the part after "did:nexa:")
     pub fn method_id(&self) -> &str {
         &self.identifier[9..]
@@ -75,7 +75,7 @@ mod tests {
         let signing_key = SigningKey::generate(&mut OsRng);
         let verifying_key = signing_key.verifying_key();
         let did = Did::from_public_key(&verifying_key);
-        
+
         assert!(did.as_str().starts_with("did:nexa:"));
         assert_eq!(did.as_str().len(), 49); // "did:nexa:" + 40 hex chars
     }

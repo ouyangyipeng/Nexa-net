@@ -25,17 +25,17 @@
 //! let document = DidDocument::new(&did, &identity.signing_key.public_key());
 //! ```
 
+pub mod credential;
 pub mod did;
 pub mod did_document;
 pub mod key_management;
-pub mod credential;
-pub mod trust_anchor;
 pub mod resolver;
+pub mod trust_anchor;
 
 // Re-exports
+pub use credential::{CredentialClaim, VerifiableCredential};
 pub use did::Did;
 pub use did_document::DidDocument;
-pub use key_management::{KeyPair, PublicKey, PrivateKey, KeyAgreementKeyPair, IdentityKeys};
-pub use credential::{VerifiableCredential, CredentialClaim};
+pub use key_management::{IdentityKeys, KeyAgreementKeyPair, KeyPair, PrivateKey, PublicKey};
+pub use resolver::{DidResolutionResult, DidResolver};
 pub use trust_anchor::TrustAnchor;
-pub use resolver::{DidResolver, DidResolutionResult};

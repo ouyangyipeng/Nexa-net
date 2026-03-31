@@ -2,14 +2,13 @@
 //!
 //! Encrypted storage for sensitive key material.
 
-use crate::error::Result;
 use crate::security::{SecurityError, SecurityResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::Zeroize;
 
 /// Key metadata for storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,7 +59,7 @@ impl SecureKeyStorage {
             encryption_enabled: true,
         }
     }
-    
+
     /// Create without encryption (for testing only)
     pub fn insecure() -> Self {
         Self {
@@ -69,7 +68,7 @@ impl SecureKeyStorage {
             encryption_enabled: false,
         }
     }
-    
+
     /// Store a key
     pub async fn store_key(
         &self,
@@ -79,7 +78,7 @@ impl SecureKeyStorage {
         description: Option<&str>,
     ) -> SecurityResult<()> {
         let mut keys = self.keys.write().await;
-        
+
         let metadata = KeyMetadata {
             key_id: key_id.to_string(),
             key_type: key_type.to_string(),
@@ -89,7 +88,7 @@ impl SecureKeyStorage {
             is_active: true,
             description: description.map(|s| s.to_string()),
         };
-        
+
         let entry = if self.encryption_enabled {
             self.encrypt_key_data(key_data, metadata)?
         } else {
@@ -100,55 +99,55 @@ impl SecureKeyStorage {
                 metadata,
             }
         };
-        
+
         keys.insert(key_id.to_string(), entry);
         Ok(())
     }
-    
+
     /// Retrieve a key
     pub async fn get_key(&self, key_id: &str) -> SecurityResult<Option<(Vec<u8>, KeyMetadata)>> {
         let mut keys = self.keys.write().await;
-        
+
         if let Some(entry) = keys.get_mut(key_id) {
             entry.metadata.last_accessed = Utc::now();
-            
+
             let key_data = if self.encryption_enabled {
                 self.decrypt_key_data(entry)?
             } else {
                 base64_decode(&entry.encrypted_data)?
             };
-            
+
             Ok(Some((key_data, entry.metadata.clone())))
         } else {
             Ok(None)
         }
     }
-    
+
     /// Check if a key exists
     pub async fn has_key(&self, key_id: &str) -> bool {
         let keys = self.keys.read().await;
         keys.contains_key(key_id)
     }
-    
+
     /// Delete a key
     pub async fn delete_key(&self, key_id: &str) -> SecurityResult<()> {
         let mut keys = self.keys.write().await;
-        
+
         if let Some(mut entry) = keys.remove(key_id) {
             // Zeroize the encrypted data
             entry.encrypted_data.zeroize();
             entry.nonce.zeroize();
         }
-        
+
         Ok(())
     }
-    
+
     /// List all key metadata (without key data)
     pub async fn list_keys(&self) -> SecurityResult<Vec<KeyMetadata>> {
         let keys = self.keys.read().await;
         Ok(keys.values().map(|e| e.metadata.clone()).collect())
     }
-    
+
     /// Update key metadata
     pub async fn update_metadata(
         &self,
@@ -157,7 +156,7 @@ impl SecureKeyStorage {
         is_active: Option<bool>,
     ) -> SecurityResult<()> {
         let mut keys = self.keys.write().await;
-        
+
         if let Some(entry) = keys.get_mut(key_id) {
             if let Some(desc) = description {
                 entry.metadata.description = Some(desc.to_string());
@@ -170,45 +169,40 @@ impl SecureKeyStorage {
             Err(SecurityError::KeyNotFound(key_id.to_string()))
         }
     }
-    
+
     /// Rotate a key (store new version)
-    pub async fn rotate_key(
-        &self,
-        key_id: &str,
-        new_key_data: &[u8],
-    ) -> SecurityResult<u32> {
+    pub async fn rotate_key(&self, key_id: &str, new_key_data: &[u8]) -> SecurityResult<u32> {
         let mut keys = self.keys.write().await;
-        
+
         if let Some(entry) = keys.get_mut(key_id) {
             let new_version = entry.metadata.version + 1;
             entry.metadata.version = new_version;
             entry.metadata.last_accessed = Utc::now();
-            
+
             if self.encryption_enabled {
                 let new_entry = self.encrypt_key_data(new_key_data, entry.metadata.clone())?;
                 *entry = new_entry;
             } else {
                 entry.encrypted_data = base64_encode(new_key_data);
             }
-            
+
             Ok(new_version)
         } else {
             Err(SecurityError::KeyNotFound(key_id.to_string()))
         }
     }
-    
+
     /// Get storage statistics
     pub async fn stats(&self) -> StorageStats {
         let keys = self.keys.read().await;
-        
+
         let total = keys.len();
         let active = keys.values().filter(|e| e.metadata.is_active).count();
-        let by_type = keys.values()
-            .fold(HashMap::new(), |mut acc, e| {
-                *acc.entry(e.metadata.key_type.clone()).or_insert(0) += 1;
-                acc
-            });
-        
+        let by_type = keys.values().fold(HashMap::new(), |mut acc, e| {
+            *acc.entry(e.metadata.key_type.clone()).or_insert(0) += 1;
+            acc
+        });
+
         StorageStats {
             total_keys: total,
             active_keys: active,
@@ -216,7 +210,7 @@ impl SecureKeyStorage {
             encryption_enabled: self.encryption_enabled,
         }
     }
-    
+
     /// Encrypt key data
     fn encrypt_key_data(
         &self,
@@ -225,29 +219,29 @@ impl SecureKeyStorage {
     ) -> SecurityResult<EncryptedKeyEntry> {
         // Simple XOR encryption for demonstration
         // In production, use proper AEAD encryption like AES-GCM or ChaCha20-Poly1305
-        let key = self.encryption_key.ok_or_else(|| {
-            SecurityError::EncryptionError("No encryption key set".to_string())
-        })?;
-        
+        let key = self
+            .encryption_key
+            .ok_or_else(|| SecurityError::EncryptionError("No encryption key set".to_string()))?;
+
         let nonce = generate_nonce();
         let encrypted = xor_encrypt(key_data, &key, &nonce);
-        
+
         Ok(EncryptedKeyEntry {
             encrypted_data: base64_encode(&encrypted),
             nonce: base64_encode(&nonce),
             metadata,
         })
     }
-    
+
     /// Decrypt key data
     fn decrypt_key_data(&self, entry: &EncryptedKeyEntry) -> SecurityResult<Vec<u8>> {
-        let key = self.encryption_key.ok_or_else(|| {
-            SecurityError::EncryptionError("No encryption key set".to_string())
-        })?;
-        
+        let key = self
+            .encryption_key
+            .ok_or_else(|| SecurityError::EncryptionError("No encryption key set".to_string()))?;
+
         let encrypted = base64_decode(&entry.encrypted_data)?;
         let nonce = base64_decode(&entry.nonce)?;
-        
+
         Ok(xor_decrypt(&encrypted, &key, &nonce))
     }
 }
@@ -307,12 +301,15 @@ mod tests {
     async fn test_store_and_retrieve_key() {
         let storage = SecureKeyStorage::insecure();
         let key_data = b"test-key-data-123";
-        
-        storage.store_key("key-1", "signing", key_data, Some("Test key")).await.unwrap();
-        
+
+        storage
+            .store_key("key-1", "signing", key_data, Some("Test key"))
+            .await
+            .unwrap();
+
         let result = storage.get_key("key-1").await.unwrap();
         assert!(result.is_some());
-        
+
         let (retrieved_data, metadata) = result.unwrap();
         assert_eq!(retrieved_data, key_data.to_vec());
         assert_eq!(metadata.key_type, "signing");
@@ -322,7 +319,7 @@ mod tests {
     #[tokio::test]
     async fn test_key_not_found() {
         let storage = SecureKeyStorage::insecure();
-        
+
         let result = storage.get_key("nonexistent").await.unwrap();
         assert!(result.is_none());
     }
@@ -330,10 +327,13 @@ mod tests {
     #[tokio::test]
     async fn test_delete_key() {
         let storage = SecureKeyStorage::insecure();
-        
-        storage.store_key("key-1", "signing", b"data", None).await.unwrap();
+
+        storage
+            .store_key("key-1", "signing", b"data", None)
+            .await
+            .unwrap();
         assert!(storage.has_key("key-1").await);
-        
+
         storage.delete_key("key-1").await.unwrap();
         assert!(!storage.has_key("key-1").await);
     }
@@ -341,12 +341,15 @@ mod tests {
     #[tokio::test]
     async fn test_rotate_key() {
         let storage = SecureKeyStorage::insecure();
-        
-        storage.store_key("key-1", "signing", b"old-data", None).await.unwrap();
-        
+
+        storage
+            .store_key("key-1", "signing", b"old-data", None)
+            .await
+            .unwrap();
+
         let new_version = storage.rotate_key("key-1", b"new-data").await.unwrap();
         assert_eq!(new_version, 2);
-        
+
         let (data, metadata) = storage.get_key("key-1").await.unwrap().unwrap();
         assert_eq!(data, b"new-data".to_vec());
         assert_eq!(metadata.version, 2);
@@ -355,10 +358,16 @@ mod tests {
     #[tokio::test]
     async fn test_list_keys() {
         let storage = SecureKeyStorage::insecure();
-        
-        storage.store_key("key-1", "signing", b"data1", None).await.unwrap();
-        storage.store_key("key-2", "encryption", b"data2", None).await.unwrap();
-        
+
+        storage
+            .store_key("key-1", "signing", b"data1", None)
+            .await
+            .unwrap();
+        storage
+            .store_key("key-2", "encryption", b"data2", None)
+            .await
+            .unwrap();
+
         let keys = storage.list_keys().await.unwrap();
         assert_eq!(keys.len(), 2);
     }
@@ -367,10 +376,13 @@ mod tests {
     async fn test_encrypted_storage() {
         let encryption_key = [42u8; 32];
         let storage = SecureKeyStorage::new(Some(encryption_key));
-        
+
         let key_data = b"secret-key-data";
-        storage.store_key("key-1", "signing", key_data, None).await.unwrap();
-        
+        storage
+            .store_key("key-1", "signing", key_data, None)
+            .await
+            .unwrap();
+
         let (retrieved, _) = storage.get_key("key-1").await.unwrap().unwrap();
         assert_eq!(retrieved, key_data.to_vec());
     }
@@ -378,11 +390,20 @@ mod tests {
     #[tokio::test]
     async fn test_storage_stats() {
         let storage = SecureKeyStorage::insecure();
-        
-        storage.store_key("key-1", "signing", b"data", None).await.unwrap();
-        storage.store_key("key-2", "signing", b"data", None).await.unwrap();
-        storage.store_key("key-3", "encryption", b"data", None).await.unwrap();
-        
+
+        storage
+            .store_key("key-1", "signing", b"data", None)
+            .await
+            .unwrap();
+        storage
+            .store_key("key-2", "signing", b"data", None)
+            .await
+            .unwrap();
+        storage
+            .store_key("key-3", "encryption", b"data", None)
+            .await
+            .unwrap();
+
         let stats = storage.stats().await;
         assert_eq!(stats.total_keys, 3);
         assert_eq!(stats.active_keys, 3);

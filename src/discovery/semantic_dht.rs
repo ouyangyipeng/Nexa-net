@@ -2,8 +2,8 @@
 //!
 //! Provides distributed storage and retrieval of semantic vectors.
 
-use crate::error::Result;
 use crate::discovery::vectorizer::SemanticVector;
+use crate::error::Result;
 use std::collections::HashMap;
 
 /// DHT node information
@@ -29,18 +29,18 @@ impl SemanticDHT {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Store a vector
     pub fn store(&mut self, key: String, vector: SemanticVector) -> Result<()> {
         self.storage.insert(key, vector);
         Ok(())
     }
-    
+
     /// Retrieve a vector
     pub fn get(&self, key: &str) -> Option<&SemanticVector> {
         self.storage.get(key)
     }
-    
+
     /// Find similar vectors
     pub fn find_similar(&self, query: &SemanticVector, threshold: f32) -> Vec<(String, f32)> {
         self.storage
@@ -52,7 +52,7 @@ impl SemanticDHT {
             .filter(|(_, sim)| *sim >= threshold)
             .collect()
     }
-    
+
     /// Add a node
     pub fn add_node(&mut self, node: DhtNode) {
         self.nodes.push(node);
@@ -67,10 +67,10 @@ mod tests {
     fn test_dht_store_retrieve() {
         let mut dht = SemanticDHT::new();
         let vec = SemanticVector::new(vec![1.0, 0.0, 0.0]);
-        
+
         dht.store("key1".to_string(), vec.clone()).unwrap();
         let retrieved = dht.get("key1");
-        
+
         assert!(retrieved.is_some());
     }
 }

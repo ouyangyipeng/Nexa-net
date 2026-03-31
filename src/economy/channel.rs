@@ -10,7 +10,7 @@
 //! ```
 
 use crate::error::{Error, Result};
-use crate::types::{Did, ChannelState};
+use crate::types::{ChannelState, Did};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -195,7 +195,8 @@ impl Channel {
             return Err(Error::ChannelOperation("Channel not open".to_string()));
         }
         self.state = ChannelState::Closing;
-        self.settlement_deadline = Some(Utc::now() + chrono::Duration::from_std(challenge_period).unwrap());
+        self.settlement_deadline =
+            Some(Utc::now() + chrono::Duration::from_std(challenge_period).unwrap());
         self.updated_at = Utc::now();
         Ok(())
     }
@@ -209,7 +210,9 @@ impl Channel {
         // Check if challenge period has passed
         if let Some(deadline) = self.settlement_deadline {
             if Utc::now() < deadline {
-                return Err(Error::ChannelOperation("Challenge period not over".to_string()));
+                return Err(Error::ChannelOperation(
+                    "Challenge period not over".to_string(),
+                ));
             }
         }
 
@@ -219,9 +222,16 @@ impl Channel {
     }
 
     /// Raise dispute
-    pub fn raise_dispute(&mut self, initiator: &str, reason: &str, challenge_period: Duration) -> Result<()> {
+    pub fn raise_dispute(
+        &mut self,
+        initiator: &str,
+        reason: &str,
+        challenge_period: Duration,
+    ) -> Result<()> {
         if !self.is_active() && !self.is_closing() {
-            return Err(Error::ChannelOperation("Cannot dispute in current state".to_string()));
+            return Err(Error::ChannelOperation(
+                "Cannot dispute in current state".to_string(),
+            ));
         }
 
         let now = Utc::now();
@@ -317,7 +327,13 @@ impl ChannelManager {
     }
 
     /// Open a new channel
-    pub fn open(&mut self, party_a: Did, party_b: Did, deposit_a: u64, deposit_b: u64) -> Result<Channel> {
+    pub fn open(
+        &mut self,
+        party_a: Did,
+        party_b: Did,
+        deposit_a: u64,
+        deposit_b: u64,
+    ) -> Result<Channel> {
         // Validate deposits
         if deposit_a < self.config.min_deposit || deposit_b < self.config.min_deposit {
             return Err(Error::ChannelOperation("Deposit below minimum".to_string()));
@@ -328,12 +344,18 @@ impl ChannelManager {
         }
 
         // Check channel limit per peer
-        let peer_channels = self.channels.values()
-            .filter(|c| c.party_a.as_str() == party_a.as_str() || c.party_b.as_str() == party_b.as_str())
+        let peer_channels = self
+            .channels
+            .values()
+            .filter(|c| {
+                c.party_a.as_str() == party_a.as_str() || c.party_b.as_str() == party_b.as_str()
+            })
             .count();
 
         if peer_channels >= self.config.max_channels_per_peer {
-            return Err(Error::ChannelOperation("Maximum channels reached".to_string()));
+            return Err(Error::ChannelOperation(
+                "Maximum channels reached".to_string(),
+            ));
         }
 
         let id = self.generate_channel_id();
@@ -354,15 +376,24 @@ impl ChannelManager {
     }
 
     /// Update channel balances
-    pub fn update_balances(&mut self, channel_id: &str, balance_a: u64, balance_b: u64) -> Result<()> {
-        let channel = self.channels.get_mut(channel_id)
+    pub fn update_balances(
+        &mut self,
+        channel_id: &str,
+        balance_a: u64,
+        balance_b: u64,
+    ) -> Result<()> {
+        let channel = self
+            .channels
+            .get_mut(channel_id)
             .ok_or_else(|| Error::ChannelOperation("Channel not found".to_string()))?;
         channel.update(balance_a, balance_b)
     }
 
     /// Close a channel
     pub fn close(&mut self, channel_id: &str) -> Result<Channel> {
-        let channel = self.channels.get_mut(channel_id)
+        let channel = self
+            .channels
+            .get_mut(channel_id)
             .ok_or_else(|| Error::ChannelOperation("Channel not found".to_string()))?;
 
         if channel.is_active() {
@@ -376,7 +407,9 @@ impl ChannelManager {
 
     /// Force close a channel (with dispute)
     pub fn force_close(&mut self, channel_id: &str, reason: &str) -> Result<Channel> {
-        let channel = self.channels.get_mut(channel_id)
+        let channel = self
+            .channels
+            .get_mut(channel_id)
             .ok_or_else(|| Error::ChannelOperation("Channel not found".to_string()))?;
 
         let initiator = channel.party_a.as_str().to_string();
@@ -392,21 +425,22 @@ impl ChannelManager {
 
     /// List open channels
     pub fn list_open(&self) -> Vec<&Channel> {
-        self.channels.values()
-            .filter(|c| c.is_active())
-            .collect()
+        self.channels.values().filter(|c| c.is_active()).collect()
     }
 
     /// List channels for a peer
     pub fn list_for_peer(&self, did: &Did) -> Vec<&Channel> {
-        self.channels.values()
+        self.channels
+            .values()
             .filter(|c| c.party_a.as_str() == did.as_str() || c.party_b.as_str() == did.as_str())
             .collect()
     }
 
     /// Remove closed channels
     pub fn cleanup_closed(&mut self) -> Vec<ChannelId> {
-        let closed: Vec<ChannelId> = self.channels.iter()
+        let closed: Vec<ChannelId> = self
+            .channels
+            .iter()
             .filter(|(_, c)| c.is_closed())
             .map(|(id, _)| id.clone())
             .collect();
@@ -425,13 +459,9 @@ impl ChannelManager {
         let closing = self.channels.values().filter(|c| c.is_closing()).count();
         let closed = self.channels.values().filter(|c| c.is_closed()).count();
 
-        let total_value = self.channels.values()
-            .map(|c| c.total_balance())
-            .sum();
+        let total_value = self.channels.values().map(|c| c.total_balance()).sum();
 
-        let total_transactions = self.channels.values()
-            .map(|c| c.total_transactions)
-            .sum();
+        let total_transactions = self.channels.values().map(|c| c.total_transactions).sum();
 
         ChannelManagerStats {
             total_channels: total,
@@ -540,7 +570,11 @@ mod tests {
         let channel_id = channel.id.clone();
 
         // Initiate close
-        manager.get_mut(&channel_id).unwrap().initiate_close(Duration::from_secs(0)).unwrap();
+        manager
+            .get_mut(&channel_id)
+            .unwrap()
+            .initiate_close(Duration::from_secs(0))
+            .unwrap();
 
         // Finalize (would need to wait for challenge period in real scenario)
         // For test, we manually set the deadline to past
@@ -549,7 +583,11 @@ mod tests {
             ch.settlement_deadline = Some(Utc::now() - chrono::Duration::seconds(1));
         }
 
-        manager.get_mut(&channel_id).unwrap().finalize_close().unwrap();
+        manager
+            .get_mut(&channel_id)
+            .unwrap()
+            .finalize_close()
+            .unwrap();
 
         let closed = manager.get(&channel_id).unwrap();
         assert!(closed.is_closed());
@@ -562,7 +600,9 @@ mod tests {
         let party_a = test_did("did:nexa:alice");
         let party_b = test_did("did:nexa:bob");
 
-        manager.open(party_a.clone(), party_b.clone(), 100, 50).unwrap();
+        manager
+            .open(party_a.clone(), party_b.clone(), 100, 50)
+            .unwrap();
         manager.open(party_a, party_b, 200, 100).unwrap();
 
         let stats = manager.stats();

@@ -380,19 +380,22 @@ impl RpcClient {
 
         // Create stream
         let stream_id = self.stream_manager.write().await.create_stream()?;
-        
+
         // Create response channel
         let (response_tx, response_rx) = oneshot::channel();
-        
+
         // Track pending call
-        self.pending_calls.insert(call_id, PendingCall {
+        self.pending_calls.insert(
             call_id,
-            stream_id,
-            response_tx,
-            start_time: Instant::now(),
-            timeout,
-            rpc_type: RpcType::Unary,
-        });
+            PendingCall {
+                call_id,
+                stream_id,
+                response_tx,
+                start_time: Instant::now(),
+                timeout,
+                rpc_type: RpcType::Unary,
+            },
+        );
 
         // Open stream
         self.stream_manager.write().await.open_stream(stream_id)?;
@@ -400,7 +403,7 @@ impl RpcClient {
         // Send headers frame
         let header_bytes = self.serialize_header(&header)?;
         let headers_frame = Frame::headers(stream_id, header_bytes);
-        
+
         // Send data frame with END_STREAM
         let mut flags = FrameFlags::empty();
         flags.set_end_stream();
@@ -418,7 +421,7 @@ impl RpcClient {
                 self.stream_manager.write().await.cancel_stream(
                     stream_id,
                     1,
-                    "Response channel closed".to_string()
+                    "Response channel closed".to_string(),
                 );
                 Err(Error::Rpc("Response channel closed".to_string()))
             }
@@ -427,7 +430,7 @@ impl RpcClient {
                 self.stream_manager.write().await.cancel_stream(
                     stream_id,
                     2,
-                    "Timeout".to_string()
+                    "Timeout".to_string(),
                 );
                 Err(Error::Timeout(header.timeout_ms))
             }
@@ -452,7 +455,7 @@ impl RpcClient {
 
         // Create receiver channel
         let (tx, rx) = mpsc::channel(64);
-        
+
         Ok(RpcStreamReceiver {
             stream_id,
             receiver: rx,
@@ -512,7 +515,9 @@ pub struct RpcStreamSender {
 impl RpcStreamSender {
     /// Send data on the stream
     pub async fn send(&self, data: Vec<u8>) -> Result<()> {
-        self.sender.send(data).await
+        self.sender
+            .send(data)
+            .await
             .map_err(|_| Error::Rpc("Stream send failed".to_string()))?;
         Ok(())
     }
@@ -520,7 +525,10 @@ impl RpcStreamSender {
     /// Close the send side
     pub async fn close(&self) -> Result<()> {
         // Send END_STREAM signal
-        self.stream_manager.write().await.close_stream(self.stream_id)?;
+        self.stream_manager
+            .write()
+            .await
+            .close_stream(self.stream_id)?;
         Ok(())
     }
 
@@ -551,7 +559,10 @@ impl RpcStreamReceiver {
 
     /// Close the receive side
     pub async fn close(&self) -> Result<()> {
-        self.stream_manager.write().await.close_stream_remote(self.stream_id)?;
+        self.stream_manager
+            .write()
+            .await
+            .close_stream_remote(self.stream_id)?;
         Ok(())
     }
 
@@ -565,7 +576,9 @@ impl RpcStreamReceiver {
 pub type MethodHandler = Box<dyn Fn(RpcHeader, Vec<u8>) -> Result<RpcResponse> + Send + Sync>;
 
 /// Streaming method handler
-pub type StreamingHandler = Box<dyn Fn(RpcHeader, mpsc::Receiver<Vec<u8>>, mpsc::Sender<Vec<u8>>) -> Result<()> + Send + Sync>;
+pub type StreamingHandler = Box<
+    dyn Fn(RpcHeader, mpsc::Receiver<Vec<u8>>, mpsc::Sender<Vec<u8>>) -> Result<()> + Send + Sync,
+>;
 
 /// RPC server for handling calls
 pub struct RpcServer {
@@ -598,43 +611,41 @@ impl RpcServer {
     /// Register a streaming method handler
     pub fn register_streaming<F>(&mut self, method: &str, handler: F)
     where
-        F: Fn(RpcHeader, mpsc::Receiver<Vec<u8>>, mpsc::Sender<Vec<u8>>) -> Result<()> + Send + Sync + 'static,
+        F: Fn(RpcHeader, mpsc::Receiver<Vec<u8>>, mpsc::Sender<Vec<u8>>) -> Result<()>
+            + Send
+            + Sync
+            + 'static,
     {
-        self.streaming_methods.insert(method.to_string(), Box::new(handler));
+        self.streaming_methods
+            .insert(method.to_string(), Box::new(handler));
     }
 
     /// Handle an incoming frame
     pub async fn handle_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
         match frame.header.frame_type {
-            FrameType::Headers => {
-                self.handle_headers_frame(frame)
-            }
-            FrameType::Data => {
-                self.handle_data_frame(frame)
-            }
-            FrameType::EndStream => {
-                self.handle_end_stream_frame(frame)
-            }
-            FrameType::Cancel => {
-                self.handle_cancel_frame(frame)
-            }
+            FrameType::Headers => self.handle_headers_frame(frame),
+            FrameType::Data => self.handle_data_frame(frame),
+            FrameType::EndStream => self.handle_end_stream_frame(frame),
+            FrameType::Cancel => self.handle_cancel_frame(frame),
             FrameType::Ping => {
                 // Respond with ACK
                 let payload = frame.payload.clone();
                 Ok(Some(Frame::ping(
-                    [payload[0], payload[1], payload[2], payload[3],
-                     payload[4], payload[5], payload[6], payload[7]],
-                    true
+                    [
+                        payload[0], payload[1], payload[2], payload[3], payload[4], payload[5],
+                        payload[6], payload[7],
+                    ],
+                    true,
                 )))
             }
-            _ => Ok(None)
+            _ => Ok(None),
         }
     }
 
     /// Handle headers frame
     fn handle_headers_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
         let stream_id = frame.header.stream_id;
-        
+
         // Parse header
         let header: RpcHeader = serde_json::from_slice(&frame.payload)
             .map_err(|e| Error::Protocol(format!("Invalid RPC header: {}", e)))?;
@@ -644,7 +655,7 @@ impl RpcServer {
             let error_response = RpcResponseHeader::error(
                 header.call_id,
                 RpcStatus::Error,
-                "Method not found".to_string()
+                "Method not found".to_string(),
             );
             return Ok(Some(Frame::error(stream_id, 1, "Method not found")));
         }
@@ -673,7 +684,8 @@ impl RpcServer {
     /// Handle cancel frame
     fn handle_cancel_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
         let stream_id = frame.header.stream_id;
-        self.stream_manager.cancel_stream(stream_id, 3, "Cancelled by client".to_string());
+        self.stream_manager
+            .cancel_stream(stream_id, 3, "Cancelled by client".to_string());
         Ok(None)
     }
 
@@ -728,7 +740,7 @@ mod tests {
         let header = RpcHeader::new("translate".to_string(), 1, "did:nexa:abc123".to_string())
             .with_budget(100)
             .with_timeout(5000);
-        
+
         assert_eq!(header.method, "translate");
         assert_eq!(header.call_id, 1);
         assert_eq!(header.budget, 100);
@@ -740,7 +752,7 @@ mod tests {
         let success = RpcResponseHeader::success(1, 50, 100);
         assert_eq!(success.status, RpcStatus::Success);
         assert_eq!(success.actual_cost, 50);
-        
+
         let error = RpcResponseHeader::error(1, RpcStatus::Timeout, "Timeout".to_string());
         assert_eq!(error.status, RpcStatus::Timeout);
         assert!(error.error_message.is_some());
@@ -770,7 +782,7 @@ mod tests {
         let frame = DataFrame::new(1, 0, b"test".to_vec())
             .with_compression(true)
             .with_type(DataType::Text);
-        
+
         assert_eq!(frame.stream_id, 1);
         assert!(frame.compressed);
         assert_eq!(frame.data_type, DataType::Text);

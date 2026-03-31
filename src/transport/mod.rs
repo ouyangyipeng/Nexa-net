@@ -49,37 +49,32 @@
 //! // let response = client.call("translate", serialized).await?;
 //! ```
 
+pub mod connection;
+pub mod error_handler;
 pub mod frame;
-pub mod stream;
 pub mod negotiator;
 pub mod rpc;
 pub mod serialization;
-pub mod connection;
-pub mod error_handler;
+pub mod stream;
 
 // Re-exports from frame module
-pub use frame::{
-    Frame, FrameFlags, FrameHeader, FrameReader, FrameType, FrameWriter,
-};
+pub use frame::{Frame, FrameFlags, FrameHeader, FrameReader, FrameType, FrameWriter};
 
 // Re-exports from stream module
-pub use stream::{
-    FlowController, Stream, StreamId, StreamManager, StreamState, StreamStats,
-};
+pub use stream::{FlowController, Stream, StreamId, StreamManager, StreamState, StreamStats};
 
 // Re-exports from rpc module
 pub use rpc::{
-    DataFrame, DataType, ErrorDetail, ErrorType, MethodHandler, RetryPolicy,
-    RpcClient, RpcHeader, RpcResponse, RpcResponseHeader, RpcServer, RpcStatus,
-    RpcStream, RpcStreamReceiver, RpcStreamSender, RpcType, StreamingHandler,
+    DataFrame, DataType, ErrorDetail, ErrorType, MethodHandler, RetryPolicy, RpcClient, RpcHeader,
+    RpcResponse, RpcResponseHeader, RpcServer, RpcStatus, RpcStream, RpcStreamReceiver,
+    RpcStreamSender, RpcType, StreamingHandler,
 };
 
 // Re-exports from serialization module
 pub use serialization::{
-    compress, decompress, BinarySerializer, CompressionAlgorithm, CompressionLevel,
-    Deserializer, FlatBuffersSerializer, JsonSerializer, ProtobufSerializer,
-    SchemaCompressor, SerializationEngine, SerializationFormat, Serializer,
-    estimate_compression_ratio, should_compress,
+    compress, decompress, estimate_compression_ratio, should_compress, BinarySerializer,
+    CompressionAlgorithm, CompressionLevel, Deserializer, FlatBuffersSerializer, JsonSerializer,
+    ProtobufSerializer, SchemaCompressor, SerializationEngine, SerializationFormat, Serializer,
 };
 
 // Re-exports from connection module
@@ -87,9 +82,8 @@ pub use connection::{Connection, ConnectionPool, Session};
 
 // Re-exports from negotiator module
 pub use negotiator::{
-    Accept, AckSchema, ClientCapabilities, CompressionType, NegotiatedProtocol,
-    NegotiationState, Negotiator, Reject, RejectReason, ServerCapabilities,
-    ServerNegotiator, SynNexa,
+    Accept, AckSchema, ClientCapabilities, CompressionType, NegotiatedProtocol, NegotiationState,
+    Negotiator, Reject, RejectReason, ServerCapabilities, ServerNegotiator, SynNexa,
 };
 
 // Re-exports from error_handler module

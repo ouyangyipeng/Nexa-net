@@ -22,7 +22,7 @@ impl ConnectionPool {
             max_connections,
         }
     }
-    
+
     /// Get or create a connection
     pub async fn get(&mut self, endpoint: &str) -> Result<&Connection> {
         if !self.connections.contains_key(endpoint) {
@@ -55,7 +55,7 @@ impl Connection {
             active: true,
         })
     }
-    
+
     /// Close the connection
     pub fn close(&mut self) {
         self.active = false;
@@ -85,12 +85,12 @@ impl Session {
             timeout: Duration::from_secs(300),
         }
     }
-    
+
     /// Check if session is expired
     pub fn is_expired(&self) -> bool {
         self.last_activity.elapsed() > self.timeout
     }
-    
+
     /// Update last activity
     pub fn touch(&mut self) {
         self.last_activity = std::time::Instant::now();

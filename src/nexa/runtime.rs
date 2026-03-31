@@ -17,7 +17,7 @@ impl AvmRuntime {
             id: uuid::Uuid::new_v4().to_string(),
         }
     }
-    
+
     /// Execute a Nexa script
     pub async fn execute(&self, _script: &str) -> Result<String> {
         // TODO: Implement actual AVM execution

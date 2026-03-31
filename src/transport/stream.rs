@@ -195,13 +195,15 @@ impl Stream {
 
     /// Check if stream can send data
     pub fn can_send(&self) -> bool {
-        matches!(self.state, StreamState::Idle | StreamState::Open)
-            && self.send_window > 0
+        matches!(self.state, StreamState::Idle | StreamState::Open) && self.send_window > 0
     }
 
     /// Check if stream can receive data
     pub fn can_receive(&self) -> bool {
-        matches!(self.state, StreamState::Idle | StreamState::Open | StreamState::HalfClosedLocal)
+        matches!(
+            self.state,
+            StreamState::Idle | StreamState::Open | StreamState::HalfClosedLocal
+        )
     }
 
     /// Check if stream is active
@@ -272,7 +274,7 @@ impl StreamManager {
     pub fn new(is_client: bool) -> Self {
         // Client-initiated streams use odd IDs, server-initiated use even
         let initial_id = if is_client { 1 } else { 2 };
-        
+
         Self {
             streams: HashMap::new(),
             next_stream_id: AtomicU32::new(initial_id),
@@ -285,13 +287,15 @@ impl StreamManager {
     /// Create a new stream
     pub fn create_stream(&mut self) -> Result<StreamId> {
         if self.streams.len() >= self.max_concurrent_streams {
-            return Err(Error::Protocol("Maximum concurrent streams exceeded".to_string()));
+            return Err(Error::Protocol(
+                "Maximum concurrent streams exceeded".to_string(),
+            ));
         }
 
         let stream_id = self.next_stream_id.fetch_add(2, Ordering::SeqCst);
         let stream = Stream::new(stream_id);
         self.streams.insert(stream_id, stream);
-        
+
         Ok(stream_id)
     }
 
@@ -307,21 +311,27 @@ impl StreamManager {
 
     /// Open a stream
     pub fn open_stream(&mut self, stream_id: StreamId) -> Result<()> {
-        let stream = self.streams.get_mut(&stream_id)
+        let stream = self
+            .streams
+            .get_mut(&stream_id)
             .ok_or_else(|| Error::Protocol(format!("Stream {} not found", stream_id)))?;
         stream.open()
     }
 
     /// Close a stream (local side)
     pub fn close_stream(&mut self, stream_id: StreamId) -> Result<()> {
-        let stream = self.streams.get_mut(&stream_id)
+        let stream = self
+            .streams
+            .get_mut(&stream_id)
             .ok_or_else(|| Error::Protocol(format!("Stream {} not found", stream_id)))?;
         stream.close_local()
     }
 
     /// Close a stream (remote side)
     pub fn close_stream_remote(&mut self, stream_id: StreamId) -> Result<()> {
-        let stream = self.streams.get_mut(&stream_id)
+        let stream = self
+            .streams
+            .get_mut(&stream_id)
             .ok_or_else(|| Error::Protocol(format!("Stream {} not found", stream_id)))?;
         stream.close_remote()
     }
@@ -345,7 +355,8 @@ impl StreamManager {
 
     /// Get all active stream IDs
     pub fn get_active_streams(&self) -> Vec<StreamId> {
-        self.streams.iter()
+        self.streams
+            .iter()
             .filter(|(_, s)| s.is_active())
             .map(|(id, _)| *id)
             .collect()
@@ -353,9 +364,7 @@ impl StreamManager {
 
     /// Get number of active streams
     pub fn active_stream_count(&self) -> usize {
-        self.streams.iter()
-            .filter(|(_, s)| s.is_active())
-            .count()
+        self.streams.iter().filter(|(_, s)| s.is_active()).count()
     }
 
     /// Check if a stream exists
@@ -365,24 +374,28 @@ impl StreamManager {
 
     /// Update send window for a stream
     pub fn update_send_window(&mut self, stream_id: StreamId, increment: u32) -> Result<()> {
-        let stream = self.streams.get_mut(&stream_id)
+        let stream = self
+            .streams
+            .get_mut(&stream_id)
             .ok_or_else(|| Error::Protocol(format!("Stream {} not found", stream_id)))?;
         stream.update_send_window(increment)
     }
 
     /// Clean up expired streams
     pub fn cleanup_expired(&mut self) -> Vec<StreamId> {
-        let expired: Vec<StreamId> = self.streams.iter()
+        let expired: Vec<StreamId> = self
+            .streams
+            .iter()
             .filter(|(_, s)| {
                 s.state == StreamState::Closed || s.stats.idle_time() > self.stream_timeout
             })
             .map(|(id, _)| *id)
             .collect();
-        
+
         for id in &expired {
             self.streams.remove(id);
         }
-        
+
         expired
     }
 
@@ -497,13 +510,13 @@ mod tests {
     fn test_stream_state_transitions() {
         let mut stream = Stream::new(1);
         assert_eq!(stream.state, StreamState::Idle);
-        
+
         stream.open().unwrap();
         assert_eq!(stream.state, StreamState::Open);
-        
+
         stream.close_local().unwrap();
         assert_eq!(stream.state, StreamState::HalfClosedLocal);
-        
+
         stream.close_remote().unwrap();
         assert_eq!(stream.state, StreamState::Closed);
     }
@@ -511,13 +524,13 @@ mod tests {
     #[test]
     fn test_stream_window_management() {
         let mut stream = Stream::new(1);
-        
+
         assert!(stream.can_send());
         assert_eq!(stream.send_window, Stream::DEFAULT_WINDOW);
-        
+
         stream.consume_send_window(1000).unwrap();
         assert_eq!(stream.send_window, Stream::DEFAULT_WINDOW - 1000);
-        
+
         stream.update_send_window(500).unwrap();
         assert_eq!(stream.send_window, Stream::DEFAULT_WINDOW - 1000 + 500);
     }
@@ -525,13 +538,13 @@ mod tests {
     #[test]
     fn test_stream_manager_create() {
         let mut manager = StreamManager::new(true);
-        
+
         let id1 = manager.create_stream().unwrap();
         assert_eq!(id1, 1); // First client stream
-        
+
         let id2 = manager.create_stream().unwrap();
         assert_eq!(id2, 3); // Second client stream (odd numbers)
-        
+
         assert!(manager.has_stream(id1));
         assert!(manager.has_stream(id2));
     }
@@ -539,14 +552,14 @@ mod tests {
     #[test]
     fn test_flow_controller() {
         let mut controller = FlowController::new(65535);
-        
+
         assert!(controller.can_send(1000));
         controller.on_send(1000).unwrap();
         assert_eq!(controller.available_window(), 65535 - 1000);
-        
+
         controller.on_window_update(500);
         assert!(controller.available_window() >= 65535 - 1000 + 500);
-        
+
         controller.on_receive(40000);
         assert!(controller.needs_window_update());
     }
@@ -554,11 +567,11 @@ mod tests {
     #[test]
     fn test_stream_stats() {
         let mut stats = StreamStats::default();
-        
+
         stats.record_send(100);
         stats.record_send(200);
         stats.record_recv(150);
-        
+
         assert_eq!(stats.bytes_sent, 300);
         assert_eq!(stats.bytes_received, 150);
         assert_eq!(stats.frames_sent, 2);

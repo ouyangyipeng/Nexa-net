@@ -27,25 +27,27 @@
 //! ```
 
 pub mod capability;
-pub mod vectorizer;
-pub mod semantic_dht;
-pub mod router;
-pub mod node_status;
 pub mod embedding;
+pub mod node_status;
+pub mod router;
+pub mod semantic_dht;
+pub mod vectorizer;
 
 // Re-exports
 pub use capability::CapabilityRegistry;
-pub use vectorizer::{Vectorizer, VectorizerBuilder, SemanticVector};
-pub use semantic_dht::SemanticDHT;
-pub use router::SemanticRouter;
 pub use node_status::{NodeStatus, NodeStatusManager};
+pub use router::SemanticRouter;
+pub use semantic_dht::SemanticDHT;
+pub use vectorizer::{SemanticVector, Vectorizer, VectorizerBuilder};
 
 // Embedding re-exports
-pub use embedding::{Embedder, EmbeddingConfig, create_embedder};
 pub use embedding::mock::MockEmbedder;
+pub use embedding::{create_embedder, Embedder, EmbeddingConfig};
 
 #[cfg(feature = "embedding-onnx")]
 pub use embedding::onnx::OnnxEmbedder;
 
 // Re-export from types
-pub use crate::types::{CapabilitySchema, EndpointDefinition, ServiceMetadata, Route, RouteContext};
+pub use crate::types::{
+    CapabilitySchema, EndpointDefinition, Route, RouteContext, ServiceMetadata,
+};

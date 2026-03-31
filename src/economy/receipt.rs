@@ -42,17 +42,17 @@ impl MicroReceipt {
             payee_signature: None,
         }
     }
-    
+
     /// Sign the receipt as payer
     pub fn sign_payer(&mut self, signature: Vec<u8>) {
         self.payer_signature = signature;
     }
-    
+
     /// Sign the receipt as payee
     pub fn sign_payee(&mut self, signature: Vec<u8>) {
         self.payee_signature = Some(signature);
     }
-    
+
     /// Check if receipt is fully signed
     pub fn is_confirmed(&self) -> bool {
         !self.payer_signature.is_empty() && self.payee_signature.is_some()
@@ -81,9 +81,9 @@ mod tests {
     fn test_receipt_creation() {
         let payer = Did::new("did:nexa:alice");
         let payee = Did::new("did:nexa:bob");
-        
+
         let receipt = MicroReceipt::new("call-123", payer, payee, 100);
-        
+
         assert_eq!(receipt.amount, 100);
         assert!(!receipt.is_confirmed());
     }
@@ -92,11 +92,11 @@ mod tests {
     fn test_receipt_signing() {
         let payer = Did::new("did:nexa:alice");
         let payee = Did::new("did:nexa:bob");
-        
+
         let mut receipt = MicroReceipt::new("call-123", payer, payee, 100);
         receipt.sign_payer(vec![1, 2, 3]);
         receipt.sign_payee(vec![4, 5, 6]);
-        
+
         assert!(receipt.is_confirmed());
     }
 }

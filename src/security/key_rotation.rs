@@ -72,37 +72,37 @@ impl KeyMetadata {
             next_rotation: now + Duration::days(policy.rotation_interval_days as i64),
         }
     }
-    
+
     /// Check if rotation is due
     pub fn is_rotation_due(&self, policy: &KeyRotationPolicy) -> bool {
         let now = Utc::now();
-        
+
         // Check time-based rotation
         if now >= self.next_rotation {
             return true;
         }
-        
+
         // Check max age
         let age = (now - self.created_at).num_days();
         if age >= policy.max_key_age_days as i64 {
             return true;
         }
-        
+
         false
     }
-    
+
     /// Check if key is in warning period
     pub fn is_in_warning_period(&self, policy: &KeyRotationPolicy) -> bool {
         let now = Utc::now();
         let warning_start = self.next_rotation - Duration::days(policy.warning_period_days as i64);
         now >= warning_start && now < self.next_rotation
     }
-    
+
     /// Record a key use
     pub fn record_use(&mut self) {
         self.use_count += 1;
     }
-    
+
     /// Mark as rotated
     pub fn mark_rotated(&mut self, policy: &KeyRotationPolicy) {
         let now = Utc::now();
@@ -127,12 +127,12 @@ impl KeyRotator {
             keys: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     /// Create with default policy
     pub fn default_rotator() -> Self {
         Self::new(KeyRotationPolicy::default())
     }
-    
+
     /// Register a key for rotation tracking
     pub async fn register_key(&self, key_id: &str, key_type: &str) -> Result<()> {
         let mut keys = self.keys.write().await;
@@ -140,14 +140,14 @@ impl KeyRotator {
         keys.insert(key_id.to_string(), metadata);
         Ok(())
     }
-    
+
     /// Unregister a key
     pub async fn unregister_key(&self, key_id: &str) -> Result<()> {
         let mut keys = self.keys.write().await;
         keys.remove(key_id);
         Ok(())
     }
-    
+
     /// Record key usage
     pub async fn record_key_use(&self, key_id: &str) -> Result<()> {
         let mut keys = self.keys.write().await;
@@ -156,7 +156,7 @@ impl KeyRotator {
         }
         Ok(())
     }
-    
+
     /// Check if a key needs rotation
     pub async fn needs_rotation(&self, key_id: &str) -> Result<bool> {
         let keys = self.keys.read().await;
@@ -166,25 +166,27 @@ impl KeyRotator {
             Ok(false)
         }
     }
-    
+
     /// Get keys that need rotation
     pub async fn get_keys_for_rotation(&self) -> Result<Vec<String>> {
         let keys = self.keys.read().await;
-        Ok(keys.iter()
+        Ok(keys
+            .iter()
             .filter(|(_, m)| m.is_rotation_due(&self.policy))
             .map(|(k, _)| k.clone())
             .collect())
     }
-    
+
     /// Get keys in warning period
     pub async fn get_keys_in_warning(&self) -> Result<Vec<(String, DateTime<Utc>)>> {
         let keys = self.keys.read().await;
-        Ok(keys.iter()
+        Ok(keys
+            .iter()
             .filter(|(_, m)| m.is_in_warning_period(&self.policy))
             .map(|(k, m)| (k.clone(), m.next_rotation))
             .collect())
     }
-    
+
     /// Mark a key as rotated
     pub async fn mark_rotated(&self, key_id: &str) -> Result<()> {
         let mut keys = self.keys.write().await;
@@ -193,32 +195,34 @@ impl KeyRotator {
         }
         Ok(())
     }
-    
+
     /// Get key metadata
     pub async fn get_metadata(&self, key_id: &str) -> Result<Option<KeyMetadata>> {
         let keys = self.keys.read().await;
         Ok(keys.get(key_id).cloned())
     }
-    
+
     /// Get all key metadata
     pub async fn get_all_metadata(&self) -> Result<Vec<KeyMetadata>> {
         let keys = self.keys.read().await;
         Ok(keys.values().cloned().collect())
     }
-    
+
     /// Get rotation statistics
     pub async fn stats(&self) -> RotationStats {
         let keys = self.keys.read().await;
-        
+
         let total = keys.len();
         let active = keys.values().filter(|m| m.is_active).count();
-        let pending_rotation = keys.values()
+        let pending_rotation = keys
+            .values()
             .filter(|m| m.is_rotation_due(&self.policy))
             .count();
-        let in_warning = keys.values()
+        let in_warning = keys
+            .values()
             .filter(|m| m.is_in_warning_period(&self.policy))
             .count();
-        
+
         RotationStats {
             total_keys: total,
             active_keys: active,
@@ -244,9 +248,9 @@ mod tests {
     #[tokio::test]
     async fn test_key_registration() {
         let rotator = KeyRotator::default_rotator();
-        
+
         rotator.register_key("key-1", "signing").await.unwrap();
-        
+
         let metadata = rotator.get_metadata("key-1").await.unwrap();
         assert!(metadata.is_some());
         assert_eq!(metadata.unwrap().key_type, "signing");
@@ -256,10 +260,10 @@ mod tests {
     async fn test_key_rotation_check() {
         let mut policy = KeyRotationPolicy::default();
         policy.rotation_interval_days = 0; // Immediate rotation
-        
+
         let rotator = KeyRotator::new(policy);
         rotator.register_key("key-1", "signing").await.unwrap();
-        
+
         // Should need rotation immediately due to 0 day interval
         let needs_rotation = rotator.needs_rotation("key-1").await.unwrap();
         assert!(needs_rotation);
@@ -269,11 +273,11 @@ mod tests {
     async fn test_key_usage_tracking() {
         let rotator = KeyRotator::default_rotator();
         rotator.register_key("key-1", "signing").await.unwrap();
-        
+
         for _ in 0..10 {
             rotator.record_key_use("key-1").await.unwrap();
         }
-        
+
         let metadata = rotator.get_metadata("key-1").await.unwrap().unwrap();
         assert_eq!(metadata.use_count, 10);
     }
@@ -281,10 +285,10 @@ mod tests {
     #[tokio::test]
     async fn test_rotation_stats() {
         let rotator = KeyRotator::default_rotator();
-        
+
         rotator.register_key("key-1", "signing").await.unwrap();
         rotator.register_key("key-2", "encryption").await.unwrap();
-        
+
         let stats = rotator.stats().await;
         assert_eq!(stats.total_keys, 2);
         assert_eq!(stats.active_keys, 2);

@@ -112,30 +112,30 @@ impl RateLimiter {
             entries: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     /// Create with default configuration
     pub fn default_limiter() -> Self {
         Self::new(RateLimitConfig::default())
     }
-    
+
     /// Check if a request is allowed
     pub async fn check(&self, key: &RateLimitKey) -> Result<RateLimitResult> {
         if !self.config.enabled {
             return Ok(RateLimitResult::Allowed);
         }
-        
+
         let mut entries = self.entries.write().await;
         let key_str = key.as_str().to_string();
-        
+
         let entry = entries
             .entry(key_str.clone())
             .or_insert_with(|| RateLimitEntry::new(self.config.burst_size));
-        
+
         let now = Utc::now();
-        
+
         // Update buckets
         self.update_buckets(entry, now);
-        
+
         // Check limits
         if entry.minute_count >= self.config.requests_per_minute {
             return Ok(RateLimitResult::Denied {
@@ -143,67 +143,67 @@ impl RateLimiter {
                 retry_after: 60 - (now - entry.minute_start).num_seconds() as u32,
             });
         }
-        
+
         if entry.hour_count >= self.config.requests_per_hour {
             return Ok(RateLimitResult::Denied {
                 reason: "Rate limit exceeded: too many requests per hour".to_string(),
                 retry_after: 3600 - (now - entry.hour_start).num_seconds() as u32,
             });
         }
-        
+
         if entry.day_count >= self.config.requests_per_day {
             return Ok(RateLimitResult::Denied {
                 reason: "Rate limit exceeded: too many requests per day".to_string(),
                 retry_after: 86400 - (now - entry.day_start).num_seconds() as u32,
             });
         }
-        
+
         // Use burst token if available, otherwise increment counters
         if entry.burst_tokens > 0 {
             entry.burst_tokens -= 1;
         }
-        
+
         entry.minute_count += 1;
         entry.hour_count += 1;
         entry.day_count += 1;
-        
+
         Ok(RateLimitResult::Allowed)
     }
-    
+
     /// Record a request (for tracking purposes)
     pub async fn record_request(&self, key: &RateLimitKey) -> Result<()> {
         if !self.config.enabled {
             return Ok(());
         }
-        
+
         let mut entries = self.entries.write().await;
         let key_str = key.as_str().to_string();
-        
+
         let entry = entries
             .entry(key_str)
             .or_insert_with(|| RateLimitEntry::new(self.config.burst_size));
-        
+
         let now = Utc::now();
         self.update_buckets(entry, now);
-        
+
         entry.minute_count += 1;
         entry.hour_count += 1;
         entry.day_count += 1;
-        
+
         Ok(())
     }
-    
+
     /// Reset rate limit for a key
     pub async fn reset(&self, key: &RateLimitKey) -> Result<()> {
         let mut entries = self.entries.write().await;
         entries.remove(key.as_str());
         Ok(())
     }
-    
+
     /// Get current usage for a key
     pub async fn get_usage(&self, key: &RateLimitKey) -> Result<RateLimitUsage> {
         let entries = self.entries.read().await;
-        
+
         if let Some(entry) = entries.get(key.as_str()) {
             Ok(RateLimitUsage {
                 minute_count: entry.minute_count,
@@ -226,28 +226,26 @@ impl RateLimiter {
             })
         }
     }
-    
+
     /// Clean up expired entries
     pub async fn cleanup(&self) -> Result<usize> {
         let mut entries = self.entries.write().await;
         let now = Utc::now();
-        
+
         let expired: Vec<_> = entries
             .iter()
-            .filter(|(_, e)| {
-                (now - e.day_start).num_hours() > 24
-            })
+            .filter(|(_, e)| (now - e.day_start).num_hours() > 24)
             .map(|(k, _)| k.clone())
             .collect();
-        
+
         let count = expired.len();
         for key in expired {
             entries.remove(&key);
         }
-        
+
         Ok(count)
     }
-    
+
     /// Update time buckets
     fn update_buckets(&self, entry: &mut RateLimitEntry, now: DateTime<Utc>) {
         // Update minute bucket
@@ -255,24 +253,24 @@ impl RateLimiter {
             entry.minute_count = 0;
             entry.minute_start = now;
         }
-        
+
         // Update hour bucket
         if (now - entry.hour_start).num_seconds() >= 3600 {
             entry.hour_count = 0;
             entry.hour_start = now;
         }
-        
+
         // Update day bucket
         if (now - entry.day_start).num_seconds() >= 86400 {
             entry.day_count = 0;
             entry.day_start = now;
         }
-        
+
         // Refill burst tokens (1 token per second)
         let seconds_since_refill = (now - entry.last_refill).num_seconds() as u32;
         if seconds_since_refill > 0 {
-            entry.burst_tokens = (entry.burst_tokens + seconds_since_refill)
-                .min(self.config.burst_size);
+            entry.burst_tokens =
+                (entry.burst_tokens + seconds_since_refill).min(self.config.burst_size);
             entry.last_refill = now;
         }
     }
@@ -284,10 +282,7 @@ pub enum RateLimitResult {
     /// Request is allowed
     Allowed,
     /// Request is denied
-    Denied {
-        reason: String,
-        retry_after: u32,
-    },
+    Denied { reason: String, retry_after: u32 },
 }
 
 impl RateLimitResult {
@@ -317,7 +312,7 @@ mod tests {
     async fn test_rate_limit_allowed() {
         let limiter = RateLimiter::default_limiter();
         let key = RateLimitKey::Did("did:nexa:test".to_string());
-        
+
         let result = limiter.check(&key).await.unwrap();
         assert!(result.is_allowed());
     }
@@ -333,11 +328,11 @@ mod tests {
         };
         let limiter = RateLimiter::new(config);
         let key = RateLimitKey::Did("did:nexa:test".to_string());
-        
+
         // First two should succeed
         limiter.check(&key).await.unwrap();
         limiter.check(&key).await.unwrap();
-        
+
         // Third should fail
         let result = limiter.check(&key).await.unwrap();
         assert!(!result.is_allowed());
@@ -351,7 +346,7 @@ mod tests {
         };
         let limiter = RateLimiter::new(config);
         let key = RateLimitKey::Did("did:nexa:test".to_string());
-        
+
         // Should always succeed when disabled
         for _ in 0..100 {
             let result = limiter.check(&key).await.unwrap();
@@ -363,10 +358,10 @@ mod tests {
     async fn test_rate_limit_usage() {
         let limiter = RateLimiter::default_limiter();
         let key = RateLimitKey::Did("did:nexa:test".to_string());
-        
+
         limiter.check(&key).await.unwrap();
         limiter.check(&key).await.unwrap();
-        
+
         let usage = limiter.get_usage(&key).await.unwrap();
         assert_eq!(usage.minute_count, 2);
     }
@@ -375,10 +370,10 @@ mod tests {
     async fn test_rate_limit_reset() {
         let limiter = RateLimiter::default_limiter();
         let key = RateLimitKey::Did("did:nexa:test".to_string());
-        
+
         limiter.check(&key).await.unwrap();
         limiter.reset(&key).await.unwrap();
-        
+
         let usage = limiter.get_usage(&key).await.unwrap();
         assert_eq!(usage.minute_count, 0);
     }

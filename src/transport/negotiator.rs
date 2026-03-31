@@ -21,9 +21,8 @@
 //! ```
 
 use crate::error::{Error, Result};
+use crate::transport::serialization::CompressionAlgorithm;
 use crate::types::{Encoding, Protocol};
-use crate::transport::serialization::{CompressionAlgorithm, SerializationFormat};
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// Compression type enumeration (matching Protobuf schema)
@@ -392,15 +391,8 @@ impl Negotiator {
     /// Create a new negotiator with default settings
     pub fn new() -> Self {
         Self {
-            supported_protocols: vec![
-                Protocol::NexaRpcV1,
-                Protocol::Grpc,
-            ],
-            supported_encodings: vec![
-                Encoding::Lz4,
-                Encoding::Gzip,
-                Encoding::None,
-            ],
+            supported_protocols: vec![Protocol::NexaRpcV1, Protocol::Grpc],
+            supported_encodings: vec![Encoding::Lz4, Encoding::Gzip, Encoding::None],
             supported_compressions: vec![
                 CompressionType::Lz4,
                 CompressionType::Zstd,
@@ -461,29 +453,35 @@ impl Negotiator {
         }
 
         // Verify selected protocol is supported
-        let protocol = self.parse_protocol(&ack.selected_protocol)
-            .ok_or_else(|| Error::ProtocolNegotiation(
-                format!("Unsupported protocol: {}", ack.selected_protocol)
-            ))?;
+        let protocol = self.parse_protocol(&ack.selected_protocol).ok_or_else(|| {
+            Error::ProtocolNegotiation(format!("Unsupported protocol: {}", ack.selected_protocol))
+        })?;
 
         // Verify selected encoding is supported
-        let encoding = self.parse_encoding(&ack.selected_encoding)
-            .ok_or_else(|| Error::ProtocolNegotiation(
-                format!("Unsupported encoding: {}", ack.selected_encoding)
-            ))?;
+        let encoding = self.parse_encoding(&ack.selected_encoding).ok_or_else(|| {
+            Error::ProtocolNegotiation(format!("Unsupported encoding: {}", ack.selected_encoding))
+        })?;
 
         // Verify selected compression is supported
-        if !self.supported_compressions.contains(&ack.selected_compression) {
-            return Err(Error::ProtocolNegotiation(
-                format!("Unsupported compression: {:?}", ack.selected_compression)
-            ));
+        if !self
+            .supported_compressions
+            .contains(&ack.selected_compression)
+        {
+            return Err(Error::ProtocolNegotiation(format!(
+                "Unsupported compression: {:?}",
+                ack.selected_compression
+            )));
         }
 
         self.result = Some(NegotiatedProtocol {
             protocol,
             encoding,
             compression: ack.selected_compression,
-            schema_hash: if ack.schema_hash.is_empty() { None } else { Some(ack.schema_hash) },
+            schema_hash: if ack.schema_hash.is_empty() {
+                None
+            } else {
+                Some(ack.schema_hash)
+            },
             session_id: None,
             estimated_cost: ack.estimated_cost,
             server_capabilities: Some(ack.capabilities),
@@ -496,9 +494,10 @@ impl Negotiator {
     /// Process REJECT response
     pub fn process_reject(&mut self, reject: Reject) -> Result<()> {
         self.state = NegotiationState::Failed;
-        Err(Error::ProtocolNegotiation(
-            format!("Negotiation rejected: {:?} - {}", reject.reason, reject.message)
-        ))
+        Err(Error::ProtocolNegotiation(format!(
+            "Negotiation rejected: {:?} - {}",
+            reject.reason, reject.message
+        )))
     }
 
     /// Complete negotiation with ACCEPT
@@ -512,7 +511,9 @@ impl Negotiator {
         }
 
         self.state = NegotiationState::Complete;
-        self.result.clone().ok_or_else(|| Error::Protocol("No negotiation result".to_string()))
+        self.result
+            .clone()
+            .ok_or_else(|| Error::Protocol("No negotiation result".to_string()))
     }
 
     /// Start negotiation (internal state update)
@@ -550,12 +551,18 @@ impl Negotiator {
 
     /// Get protocol strings for SYN message
     fn protocol_strings(&self) -> Vec<String> {
-        self.supported_protocols.iter().map(|p| p.to_string()).collect()
+        self.supported_protocols
+            .iter()
+            .map(|p| p.to_string())
+            .collect()
     }
 
     /// Get encoding strings for SYN message
     fn encoding_strings(&self) -> Vec<String> {
-        self.supported_encodings.iter().map(|e| e.to_string()).collect()
+        self.supported_encodings
+            .iter()
+            .map(|e| e.to_string())
+            .collect()
     }
 
     /// Parse protocol string
@@ -602,15 +609,8 @@ impl ServerNegotiator {
     /// Create a new server negotiator
     pub fn new() -> Self {
         Self {
-            supported_protocols: vec![
-                Protocol::NexaRpcV1,
-                Protocol::Grpc,
-            ],
-            supported_encodings: vec![
-                Encoding::Lz4,
-                Encoding::Gzip,
-                Encoding::None,
-            ],
+            supported_protocols: vec![Protocol::NexaRpcV1, Protocol::Grpc],
+            supported_encodings: vec![Encoding::Lz4, Encoding::Gzip, Encoding::None],
             supported_compressions: vec![
                 CompressionType::Lz4,
                 CompressionType::Zstd,
@@ -629,23 +629,27 @@ impl ServerNegotiator {
     /// Process SYN-NEXA and create response
     pub fn process_syn(&self, syn: &SynNexa) -> Result<AckSchema> {
         // Find matching protocol
-        let protocol = self.select_protocol(&syn.supported_protocols)
+        let protocol = self
+            .select_protocol(&syn.supported_protocols)
             .ok_or_else(|| Error::ProtocolNegotiation("No matching protocol".to_string()))?;
 
         // Find matching encoding
-        let encoding = self.select_encoding(&syn.supported_encodings)
+        let encoding = self
+            .select_encoding(&syn.supported_encodings)
             .ok_or_else(|| Error::ProtocolNegotiation("No matching encoding".to_string()))?;
 
         // Find matching compression
-        let compression = self.select_compression(&syn.supported_compressions)
+        let compression = self
+            .select_compression(&syn.supported_compressions)
             .ok_or_else(|| Error::ProtocolNegotiation("No matching compression".to_string()))?;
 
         // Check budget
         let estimated_cost = self.estimate_cost(&syn.intent_hash);
         if estimated_cost > syn.max_budget {
-            return Err(Error::ProtocolNegotiation(
-                format!("Estimated cost {} exceeds budget {}", estimated_cost, syn.max_budget)
-            ));
+            return Err(Error::ProtocolNegotiation(format!(
+                "Estimated cost {} exceeds budget {}",
+                estimated_cost, syn.max_budget
+            )));
         }
 
         // Create ACK-SCHEMA
@@ -657,32 +661,44 @@ impl ServerNegotiator {
     /// Process SYN-NEXA and create response (with Reject details)
     pub fn process_syn_with_reject(&self, syn: &SynNexa) -> std::result::Result<AckSchema, Reject> {
         // Find matching protocol
-        let protocol = self.select_protocol(&syn.supported_protocols)
-            .ok_or_else(|| Reject::new(
-                RejectReason::UnsupportedProtocol,
-                "No matching protocol".to_string()
-            ))?;
+        let protocol = self
+            .select_protocol(&syn.supported_protocols)
+            .ok_or_else(|| {
+                Reject::new(
+                    RejectReason::UnsupportedProtocol,
+                    "No matching protocol".to_string(),
+                )
+            })?;
 
         // Find matching encoding
-        let encoding = self.select_encoding(&syn.supported_encodings)
-            .ok_or_else(|| Reject::new(
-                RejectReason::UnsupportedProtocol,
-                "No matching encoding".to_string()
-            ))?;
+        let encoding = self
+            .select_encoding(&syn.supported_encodings)
+            .ok_or_else(|| {
+                Reject::new(
+                    RejectReason::UnsupportedProtocol,
+                    "No matching encoding".to_string(),
+                )
+            })?;
 
         // Find matching compression
-        let compression = self.select_compression(&syn.supported_compressions)
-            .ok_or_else(|| Reject::new(
-                RejectReason::UnsupportedProtocol,
-                "No matching compression".to_string()
-            ))?;
+        let compression = self
+            .select_compression(&syn.supported_compressions)
+            .ok_or_else(|| {
+                Reject::new(
+                    RejectReason::UnsupportedProtocol,
+                    "No matching compression".to_string(),
+                )
+            })?;
 
         // Check budget
         let estimated_cost = self.estimate_cost(&syn.intent_hash);
         if estimated_cost > syn.max_budget {
             return Err(Reject::new(
                 RejectReason::InsufficientBudget,
-                format!("Estimated cost {} exceeds budget {}", estimated_cost, syn.max_budget)
+                format!(
+                    "Estimated cost {} exceeds budget {}",
+                    estimated_cost, syn.max_budget
+                ),
             ));
         }
 
@@ -717,7 +733,10 @@ impl ServerNegotiator {
     }
 
     /// Select best matching compression
-    fn select_compression(&self, client_compressions: &[CompressionType]) -> Option<CompressionType> {
+    fn select_compression(
+        &self,
+        client_compressions: &[CompressionType],
+    ) -> Option<CompressionType> {
         for client_comp in client_compressions {
             if self.supported_compressions.contains(client_comp) {
                 return Some(*client_comp);
@@ -777,7 +796,7 @@ mod tests {
         let ack = AckSchema::new(
             "nexa-rpc-v1".to_string(),
             "protobuf".to_string(),
-            CompressionType::Lz4
+            CompressionType::Lz4,
         );
         assert_eq!(ack.selected_protocol, "nexa-rpc-v1");
         assert_eq!(ack.selected_compression, CompressionType::Lz4);
@@ -798,12 +817,15 @@ mod tests {
     fn test_server_negotiator() {
         let server = ServerNegotiator::new();
         // Create SYN with matching encodings
-        let syn = SynNexa::new("intent-hash".to_string(), 1000)
-            .with_encodings(vec!["lz4".to_string(), "gzip".to_string(), "none".to_string()]);
-        
+        let syn = SynNexa::new("intent-hash".to_string(), 1000).with_encodings(vec![
+            "lz4".to_string(),
+            "gzip".to_string(),
+            "none".to_string(),
+        ]);
+
         let result = server.process_syn(&syn);
         assert!(result.is_ok());
-        
+
         let ack = result.unwrap();
         assert!(!ack.selected_protocol.is_empty());
     }
@@ -812,12 +834,15 @@ mod tests {
     fn test_server_negotiator_with_reject() {
         let server = ServerNegotiator::new();
         // Create SYN with matching encodings
-        let syn = SynNexa::new("intent-hash".to_string(), 1000)
-            .with_encodings(vec!["lz4".to_string(), "gzip".to_string(), "none".to_string()]);
-        
+        let syn = SynNexa::new("intent-hash".to_string(), 1000).with_encodings(vec![
+            "lz4".to_string(),
+            "gzip".to_string(),
+            "none".to_string(),
+        ]);
+
         let result = server.process_syn_with_reject(&syn);
         assert!(result.is_ok());
-        
+
         let ack = result.unwrap();
         assert!(!ack.selected_protocol.is_empty());
     }
@@ -836,24 +861,24 @@ mod tests {
     #[test]
     fn test_negotiation_flow() {
         let mut client = Negotiator::new();
-        
+
         // Create SYN
         let syn = client.create_syn("intent-hash".to_string(), 1000);
         assert!(!syn.supported_protocols.is_empty());
-        
+
         // Start negotiation
         client.start();
         assert_eq!(client.state(), NegotiationState::SynSent);
-        
+
         // Process ACK
         let ack = AckSchema::new(
             "nexa-rpc-v1".to_string(),
             "lz4".to_string(),
-            CompressionType::Lz4
+            CompressionType::Lz4,
         );
         client.process_ack(ack).unwrap();
         assert_eq!(client.state(), NegotiationState::AckReceived);
-        
+
         // Complete
         let result = client.complete("session-123".to_string()).unwrap();
         assert_eq!(client.state(), NegotiationState::Complete);

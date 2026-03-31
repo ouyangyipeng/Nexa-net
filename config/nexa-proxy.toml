@@ -1,0 +1,112 @@
+# Nexa-Proxy Configuration
+# This is the main configuration file for the Nexa-net sidecar proxy
+
+[proxy]
+# REST API endpoint
+rest_endpoint = "0.0.0.0:7070"
+# gRPC API endpoint  
+grpc_endpoint = "0.0.0.0:7071"
+# Metrics endpoint (Prometheus)
+metrics_endpoint = "0.0.0.0:9090"
+# Request timeout in milliseconds
+request_timeout_ms = 30000
+# Maximum concurrent connections
+max_connections = 1000
+
+[identity]
+# Path to identity key file
+key_file = "/etc/nexa/identity.key"
+# DID method (nexa, web, key)
+did_method = "nexa"
+# Auto-generate identity if not exists
+auto_generate = true
+
+[discovery]
+# Supernode URL for capability registration
+supernode_url = "http://supernode:8080"
+# Cache TTL for capability lookups (seconds)
+cache_ttl_seconds = 300
+# Maximum cached capabilities
+max_cache_size = 10000
+# Enable semantic discovery
+semantic_discovery = true
+
+[embedding]
+# Embedding backend: mock, onnx, api
+backend = "mock"
+# ONNX model path (if backend = "onnx")
+model_path = "./models/all-MiniLM-L6-v2.onnx"
+# Tokenizer path (if backend = "onnx")
+tokenizer_path = "./models/tokenizer.json"
+# Maximum sequence length
+max_length = 256
+# API endpoint (if backend = "api")
+api_endpoint = "https://api.openai.com/v1/embeddings"
+# API model name
+api_model = "text-embedding-ada-002"
+
+[storage]
+# Storage backend: memory, postgres, redis
+backend = "memory"
+# PostgreSQL connection URL (if backend = "postgres")
+postgres_url = "postgresql://nexa:nexa-secret@postgres:5432/nexa_net"
+# Redis connection URL (if backend = "redis")
+redis_url = "redis://redis:6379"
+# Connection pool size
+pool_size = 10
+
+[economy]
+# Default budget per session (micro-tokens)
+default_budget = 1000000
+# Hourly budget limit per DID
+hourly_limit = 10000000
+# Daily budget limit per DID
+daily_limit = 100000000
+# Payment channel challenge period (seconds)
+challenge_period_seconds = 3600
+
+[security]
+# Enable TLS
+tls_enabled = false
+# TLS certificate path
+tls_cert = "/etc/nexa/tls/server.crt"
+# TLS private key path
+tls_key = "/etc/nexa/tls/server.key"
+# Enable mTLS (mutual TLS)
+mtls_enabled = false
+# CA certificate for client verification
+ca_cert = "/etc/nexa/tls/ca.crt"
+# Rate limiting: requests per second
+rate_limit_rps = 100
+# Rate limiting: burst size
+rate_limit_burst = 200
+
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+# Log format: json, pretty
+format = "json"
+# Log file path (empty for stdout)
+file = "/var/log/nexa/proxy.log"
+# Maximum log file size (MB)
+max_file_size_mb = 100
+# Maximum number of log files
+max_files = 10
+
+[metrics]
+# Enable Prometheus metrics
+enabled = true
+# Metrics namespace
+namespace = "nexa_net"
+# Histogram buckets for latency (milliseconds)
+latency_buckets = [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+
+[tracing]
+# Enable distributed tracing
+enabled = false
+# Tracing endpoint (Jaeger, Zipkin, etc.)
+endpoint = "http://jaeger:14268/api/traces"
+# Service name
+service_name = "nexa-proxy"
+# Sampling rate (0.0 - 1.0)
+sampling_rate = 0.1

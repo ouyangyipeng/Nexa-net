@@ -18,7 +18,7 @@ impl ProxyClient {
             endpoint: endpoint.to_string(),
         }
     }
-    
+
     /// Make a network call
     pub async fn call(&self, _request: CallRequest) -> Result<CallResponse> {
         // TODO: Implement actual call

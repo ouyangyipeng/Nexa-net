@@ -24,11 +24,11 @@
 //! }
 //! ```
 
-pub mod server;
 pub mod client;
 pub mod config;
+pub mod server;
 
 // Re-exports
-pub use server::ProxyServer;
 pub use client::ProxyClient;
 pub use config::ProxyConfig;
+pub use server::ProxyServer;

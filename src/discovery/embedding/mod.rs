@@ -73,18 +73,17 @@ impl Default for EmbeddingConfig {
 pub fn create_embedder(config: EmbeddingConfig) -> Result<Arc<dyn Embedder>> {
     match config {
         #[cfg(feature = "embedding-onnx")]
-        EmbeddingConfig::Onnx { model_path, max_length } => {
-            Ok(Arc::new(onnx::OnnxEmbedder::new(model_path, max_length)?))
-        }
+        EmbeddingConfig::Onnx {
+            model_path,
+            max_length,
+        } => Ok(Arc::new(onnx::OnnxEmbedder::new(model_path, max_length)?)),
 
-        EmbeddingConfig::Mock { dimensions } => {
-            Ok(Arc::new(mock::MockEmbedder::new(dimensions)))
-        }
+        EmbeddingConfig::Mock { dimensions } => Ok(Arc::new(mock::MockEmbedder::new(dimensions))),
 
         EmbeddingConfig::Api { .. } => {
             // API embedder not yet implemented
             Err(crate::error::Error::Config(
-                "API embedder not yet implemented".to_string()
+                "API embedder not yet implemented".to_string(),
             ))
         }
     }

@@ -11,11 +11,10 @@
 //! 4. **Load Balance** - Current provider load
 //! 5. **Latency** - Estimated response time
 
+use crate::discovery::{CapabilityRegistry, NodeStatusManager, Vectorizer};
 use crate::error::{Error, Result};
 use crate::types::{Route, RouteContext};
-use crate::discovery::{CapabilityRegistry, Vectorizer, NodeStatusManager};
 use std::sync::Arc;
-use std::time::Duration;
 
 /// Routing weights for multi-factor scoring
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -124,12 +123,11 @@ pub struct RoutingCandidate {
 impl RoutingCandidate {
     /// Calculate combined score using weights
     pub fn calculate_combined_score(&mut self, weights: &RoutingWeights) {
-        self.combined_score = 
-            self.similarity_score * weights.similarity +
-            self.quality_score * weights.quality +
-            self.cost_score * weights.cost +
-            self.load_score * weights.load +
-            self.latency_score * weights.latency;
+        self.combined_score = self.similarity_score * weights.similarity
+            + self.quality_score * weights.quality
+            + self.cost_score * weights.cost
+            + self.load_score * weights.load
+            + self.latency_score * weights.latency;
     }
 }
 
@@ -206,9 +204,9 @@ impl SemanticRouter {
             }
 
             // Calculate similarity
-            let cap_text = format!("{} {}", 
-                cap.schema.metadata.name, 
-                cap.schema.metadata.description
+            let cap_text = format!(
+                "{} {}",
+                cap.schema.metadata.name, cap.schema.metadata.description
             );
             let cap_vec = self.vectorizer.vectorize(&cap_text)?;
             let similarity = intent_vec.cosine_similarity(&cap_vec);
@@ -219,10 +217,10 @@ impl SemanticRouter {
             }
 
             // Get node status for load info
-            let node_status = self.node_status.get(&cap.schema.metadata.did.as_str().to_string());
-            let load_score = node_status
-                .map(|s| 1.0 - s.load)
-                .unwrap_or(0.5);
+            let node_status = self
+                .node_status
+                .get(&cap.schema.metadata.did.as_str().to_string());
+            let load_score = node_status.map(|s| 1.0 - s.load).unwrap_or(0.5);
 
             // Process each endpoint
             for endpoint in &cap.schema.endpoints {
@@ -256,9 +254,7 @@ impl SemanticRouter {
         }
 
         // Sort by combined score
-        candidates.sort_by(|a, b| {
-            b.combined_score.partial_cmp(&a.combined_score).unwrap()
-        });
+        candidates.sort_by(|a, b| b.combined_score.partial_cmp(&a.combined_score).unwrap());
 
         // Convert to routes and limit
         let routes: Vec<Route> = candidates
@@ -288,7 +284,9 @@ impl SemanticRouter {
     pub async fn select_best(&self, intent: &str, context: RouteContext) -> Result<Route> {
         let routes = self.discover(intent, context).await?;
 
-        routes.into_iter().next()
+        routes
+            .into_iter()
+            .next()
             .ok_or_else(|| Error::ServiceNotFound(intent.to_string()))
     }
 
@@ -304,9 +302,9 @@ impl SemanticRouter {
                 continue;
             }
 
-            let cap_text = format!("{} {}", 
-                cap.schema.metadata.name, 
-                cap.schema.metadata.description
+            let cap_text = format!(
+                "{} {}",
+                cap.schema.metadata.name, cap.schema.metadata.description
             );
             let cap_vec = self.vectorizer.vectorize(&cap_text)?;
             let similarity = intent_vec.cosine_similarity(&cap_vec);
@@ -315,7 +313,9 @@ impl SemanticRouter {
                 continue;
             }
 
-            let node_status = self.node_status.get(&cap.schema.metadata.did.as_str().to_string());
+            let node_status = self
+                .node_status
+                .get(&cap.schema.metadata.did.as_str().to_string());
             let load_score = node_status.map(|s| 1.0 - s.load).unwrap_or(0.5);
 
             for endpoint in &cap.schema.endpoints {
@@ -338,9 +338,7 @@ impl SemanticRouter {
             }
         }
 
-        candidates.sort_by(|a, b| {
-            b.combined_score.partial_cmp(&a.combined_score).unwrap()
-        });
+        candidates.sort_by(|a, b| b.combined_score.partial_cmp(&a.combined_score).unwrap());
 
         Ok(candidates)
     }
@@ -367,13 +365,15 @@ impl SemanticRouter {
 
     /// Update node status
     pub fn update_node_status(&self, did: &str, load: f32, latency_ms: u64) {
-        let mut status = self.node_status.get(did)
+        let mut status = self
+            .node_status
+            .get(did)
             .cloned()
             .unwrap_or_else(|| crate::discovery::node_status::NodeStatus::new(did));
-        
+
         status.load = load;
         status.avg_latency_ms = latency_ms;
-        
+
         // Note: This would need interior mutability in production
         // For now, this is a placeholder
     }
@@ -401,7 +401,8 @@ impl SemanticRouter {
     pub async fn explain(&self, intent: &str) -> Result<RoutingExplanation> {
         let candidates = self.discover_detailed(intent).await?;
 
-        let best = candidates.first()
+        let best = candidates
+            .first()
             .ok_or_else(|| Error::ServiceNotFound(intent.to_string()))?;
 
         let mut factors = HashMap::new();
@@ -411,7 +412,8 @@ impl SemanticRouter {
         factors.insert("load".to_string(), best.load_score);
         factors.insert("latency".to_string(), best.latency_score);
 
-        let rejected: Vec<(String, String)> = candidates.iter()
+        let rejected: Vec<(String, String)> = candidates
+            .iter()
             .skip(1)
             .take(5)
             .map(|c| {

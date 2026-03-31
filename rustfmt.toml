@@ -1,0 +1,38 @@
+# Rust format configuration (stable only)
+# See https://rust-lang.github.io/rustfmt/
+
+# Maximum line width
+max_width = 100
+
+# Number of spaces per tab
+tab_spaces = 4
+
+# Use spaces instead of tabs
+hard_tabs = false
+
+# Unix-style line endings
+newline_style = "Unix"
+
+# Reorder imports alphabetically
+reorder_imports = true
+
+# Reorder module declarations alphabetically
+reorder_modules = true
+
+# Use field init shorthand where possible
+use_field_init_shorthand = true
+
+# Edition of Rust to use for parsing
+edition = "2021"
+
+# Chain width
+chain_width = 60
+
+# Single line if else max width
+single_line_if_else_max_width = 50
+
+# Struct lit width
+struct_lit_width = 18
+
+# Use small heuristics
+use_small_heuristics = "Default"

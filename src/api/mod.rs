@@ -8,11 +8,11 @@
 //! - **gRPC**: gRPC service definitions
 //! - **SDK**: High-level SDK for developers
 
-pub mod rest;
 pub mod grpc;
+pub mod rest;
 pub mod sdk;
 
 // Re-exports
-pub use rest::RestServer;
 pub use grpc::GrpcServer;
+pub use rest::RestServer;
 pub use sdk::{NexaClient, NexaClientBuilder};

@@ -2,7 +2,7 @@
 //!
 //! Resolves DID documents from the distributed storage.
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::identity::{Did, DidDocument};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -68,17 +68,17 @@ impl DidResolver {
             cache_ttl: Duration::from_secs(3600), // 1 hour default TTL
         }
     }
-    
+
     /// Set cache TTL
     pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
         self.cache_ttl = ttl;
         self
     }
-    
+
     /// Resolve a DID to its document
     pub async fn resolve(&mut self, did: &Did) -> Result<DidResolutionResult> {
         let did_str = did.as_str();
-        
+
         // Check cache first
         if let Some(cached) = self.cache.get(did_str) {
             if cached.cached_at.elapsed() < self.cache_ttl {
@@ -93,7 +93,7 @@ impl DidResolver {
                 });
             }
         }
-        
+
         // TODO: Query DHT network for DID document
         // For now, return an error indicating the document was not found
         Ok(DidResolutionResult {
@@ -106,11 +106,11 @@ impl DidResolver {
             },
         })
     }
-    
+
     /// Resolve with verification
     pub async fn resolve_with_verification(&mut self, did: &Did) -> Result<DidResolutionResult> {
         let result = self.resolve(did).await?;
-        
+
         if let Some(doc) = &result.document {
             // Verify the document's integrity
             if !self.verify_document(did, doc) {
@@ -125,39 +125,42 @@ impl DidResolver {
                 });
             }
         }
-        
+
         Ok(result)
     }
-    
+
     /// Cache a DID document
     pub fn cache_document(&mut self, did: &Did, document: DidDocument) {
-        self.cache.insert(did.as_str().to_string(), CachedDocument {
-            document,
-            cached_at: Instant::now(),
-        });
+        self.cache.insert(
+            did.as_str().to_string(),
+            CachedDocument {
+                document,
+                cached_at: Instant::now(),
+            },
+        );
     }
-    
+
     /// Invalidate cache for a DID
     pub fn invalidate_cache(&mut self, did: &Did) {
         self.cache.remove(did.as_str());
     }
-    
+
     /// Clear all cache
     pub fn clear_cache(&mut self) {
         self.cache.clear();
     }
-    
+
     /// Verify a DID document
     fn verify_document(&self, did: &Did, document: &DidDocument) -> bool {
         // Check that the document ID matches the DID
         if document.id != did.as_str() {
             return false;
         }
-        
+
         // TODO: Verify signatures and proof
         true
     }
-    
+
     /// Register a DID document locally
     pub fn register(&mut self, did: &Did, document: DidDocument) {
         self.cache_document(did, document);
@@ -187,9 +190,9 @@ mod tests {
         let keypair = KeyPair::generate().unwrap();
         let did = Did::from_public_key(keypair.public_key().inner());
         let doc = DidDocument::new(&did, keypair.public_key().inner());
-        
+
         resolver.cache_document(&did, doc.clone());
-        
+
         assert!(resolver.cache.contains_key(did.as_str()));
     }
 
@@ -199,10 +202,10 @@ mod tests {
         let keypair = KeyPair::generate().unwrap();
         let did = Did::from_public_key(keypair.public_key().inner());
         let doc = DidDocument::new(&did, keypair.public_key().inner());
-        
+
         resolver.cache_document(&did, doc);
         resolver.invalidate_cache(&did);
-        
+
         assert!(!resolver.cache.contains_key(did.as_str()));
     }
 }

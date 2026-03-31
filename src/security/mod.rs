@@ -14,8 +14,8 @@ pub mod secure_storage;
 // Re-exports
 pub use audit::{AuditEvent, AuditLogger, AuditSink};
 pub use key_rotation::{KeyRotationPolicy, KeyRotator};
-pub use rate_limit::{RateLimiter, RateLimitConfig};
-pub use secure_storage::{SecureKeyStorage, KeyMetadata};
+pub use rate_limit::{RateLimitConfig, RateLimiter};
+pub use secure_storage::{KeyMetadata, SecureKeyStorage};
 
 /// Security configuration
 #[derive(Debug, Clone)]
@@ -46,19 +46,19 @@ impl Default for SecurityConfig {
 pub enum SecurityError {
     #[error("Key not found: {0}")]
     KeyNotFound(String),
-    
+
     #[error("Key rotation failed: {0}")]
     RotationFailed(String),
-    
+
     #[error("Rate limit exceeded: {0}")]
     RateLimitExceeded(String),
-    
+
     #[error("Encryption error: {0}")]
     EncryptionError(String),
-    
+
     #[error("Audit log error: {0}")]
     AuditError(String),
-    
+
     #[error("Invalid key: {0}")]
     InvalidKey(String),
 }

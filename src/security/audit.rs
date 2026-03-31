@@ -40,7 +40,7 @@ pub enum AuditEvent {
         key_type: String,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// Key was rotated
     KeyRotated {
         key_id: String,
@@ -48,7 +48,7 @@ pub enum AuditEvent {
         new_version: u32,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// Key was accessed
     KeyAccessed {
         key_id: String,
@@ -56,7 +56,7 @@ pub enum AuditEvent {
         operation: String,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// Successful authentication
     AuthenticationSuccess {
         did: String,
@@ -64,7 +64,7 @@ pub enum AuditEvent {
         ip_address: Option<String>,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// Failed authentication attempt
     AuthenticationFailure {
         did: String,
@@ -72,7 +72,7 @@ pub enum AuditEvent {
         ip_address: Option<String>,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// Channel opened
     ChannelOpened {
         channel_id: String,
@@ -80,7 +80,7 @@ pub enum AuditEvent {
         party_b: String,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// Channel closed
     ChannelClosed {
         channel_id: String,
@@ -89,7 +89,7 @@ pub enum AuditEvent {
         final_balance_b: u64,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// Rate limit exceeded
     RateLimitExceeded {
         identifier: String,
@@ -98,7 +98,7 @@ pub enum AuditEvent {
         limit: u32,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// Security violation detected
     SecurityViolation {
         violation_type: String,
@@ -123,7 +123,7 @@ impl AuditEvent {
             AuditEvent::SecurityViolation { timestamp, .. } => *timestamp,
         }
     }
-    
+
     /// Get event type name
     pub fn event_type(&self) -> &'static str {
         match self {
@@ -160,21 +160,23 @@ impl MemoryAuditSink {
             max_events,
         }
     }
-    
+
     /// Get all events
     pub async fn get_events(&self) -> Vec<AuditEvent> {
         self.events.read().await.clone()
     }
-    
+
     /// Get events by type
     pub async fn get_events_by_type(&self, event_type: &str) -> Vec<AuditEvent> {
-        self.events.read().await
+        self.events
+            .read()
+            .await
             .iter()
             .filter(|e| e.event_type() == event_type)
             .cloned()
             .collect()
     }
-    
+
     /// Clear all events
     pub async fn clear(&self) {
         self.events.write().await.clear();
@@ -185,7 +187,7 @@ impl AuditSink for MemoryAuditSink {
     fn log(&self, event: AuditEvent) -> Result<()> {
         let events = self.events.clone();
         let max = self.max_events;
-        
+
         // Use try_write to avoid blocking in async context
         if let Ok(mut events) = events.try_write() {
             if events.len() >= max {
@@ -193,7 +195,7 @@ impl AuditSink for MemoryAuditSink {
             }
             events.push(event);
         }
-        
+
         Ok(())
     }
 }
@@ -227,22 +229,22 @@ impl AuditLogger {
             enabled: true,
         }
     }
-    
+
     /// Create with logging sink
     pub fn with_logging() -> Self {
         Self::new(Arc::new(LoggingAuditSink))
     }
-    
+
     /// Create with memory sink (for testing)
     pub fn with_memory(max_events: usize) -> Self {
         Self::new(Arc::new(MemoryAuditSink::new(max_events)))
     }
-    
+
     /// Enable or disable logging
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
-    
+
     /// Log an event
     pub fn log(&self, event: AuditEvent) -> Result<()> {
         if self.enabled {
@@ -250,7 +252,7 @@ impl AuditLogger {
         }
         Ok(())
     }
-    
+
     /// Log key generation
     pub fn log_key_generated(&self, key_id: &str, key_type: &str) -> Result<()> {
         self.log(AuditEvent::KeyGenerated {
@@ -259,7 +261,7 @@ impl AuditLogger {
             timestamp: Utc::now(),
         })
     }
-    
+
     /// Log key rotation
     pub fn log_key_rotated(&self, key_id: &str, old_version: u32, new_version: u32) -> Result<()> {
         self.log(AuditEvent::KeyRotated {
@@ -269,7 +271,7 @@ impl AuditLogger {
             timestamp: Utc::now(),
         })
     }
-    
+
     /// Log authentication success
     pub fn log_auth_success(&self, did: &str, method: AuthMethod, ip: Option<&str>) -> Result<()> {
         self.log(AuditEvent::AuthenticationSuccess {
@@ -279,7 +281,7 @@ impl AuditLogger {
             timestamp: Utc::now(),
         })
     }
-    
+
     /// Log authentication failure
     pub fn log_auth_failure(&self, did: &str, reason: &str, ip: Option<&str>) -> Result<()> {
         self.log(AuditEvent::AuthenticationFailure {
@@ -289,7 +291,7 @@ impl AuditLogger {
             timestamp: Utc::now(),
         })
     }
-    
+
     /// Log channel opened
     pub fn log_channel_opened(&self, channel_id: &str, party_a: &str, party_b: &str) -> Result<()> {
         self.log(AuditEvent::ChannelOpened {
@@ -299,7 +301,7 @@ impl AuditLogger {
             timestamp: Utc::now(),
         })
     }
-    
+
     /// Log channel closed
     pub fn log_channel_closed(
         &self,
@@ -316,9 +318,14 @@ impl AuditLogger {
             timestamp: Utc::now(),
         })
     }
-    
+
     /// Log security violation
-    pub fn log_security_violation(&self, violation_type: &str, details: &str, severity: &str) -> Result<()> {
+    pub fn log_security_violation(
+        &self,
+        violation_type: &str,
+        details: &str,
+        severity: &str,
+    ) -> Result<()> {
         self.log(AuditEvent::SecurityViolation {
             violation_type: violation_type.to_string(),
             details: details.to_string(),
@@ -345,7 +352,7 @@ mod tests {
             key_type: "ed25519".to_string(),
             timestamp: Utc::now(),
         };
-        
+
         assert_eq!(event.event_type(), "key_generated");
         assert!(event.timestamp() <= Utc::now());
     }
@@ -354,13 +361,13 @@ mod tests {
     async fn test_memory_sink() {
         let sink = Arc::new(MemoryAuditSink::new(100));
         let logger = AuditLogger::new(sink.clone());
-        
+
         logger.log_key_generated("key-1", "ed25519").unwrap();
         logger.log_key_rotated("key-1", 1, 2).unwrap();
-        
+
         let events = sink.get_events().await;
         assert_eq!(events.len(), 2);
-        
+
         let key_events = sink.get_events_by_type("key_generated").await;
         assert_eq!(key_events.len(), 1);
     }
@@ -369,11 +376,13 @@ mod tests {
     async fn test_memory_sink_overflow() {
         let sink = Arc::new(MemoryAuditSink::new(5));
         let logger = AuditLogger::new(sink.clone());
-        
+
         for i in 0..10 {
-            logger.log_key_generated(&format!("key-{}", i), "ed25519").unwrap();
+            logger
+                .log_key_generated(&format!("key-{}", i), "ed25519")
+                .unwrap();
         }
-        
+
         let events = sink.get_events().await;
         assert_eq!(events.len(), 5);
         // Should have the last 5 events

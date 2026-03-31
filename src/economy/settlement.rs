@@ -2,8 +2,8 @@
 //!
 //! Settlement and dispute resolution.
 
-use crate::error::Result;
 use crate::economy::{Channel, ChannelId, MicroReceipt};
+use crate::error::Result;
 use chrono::{DateTime, Utc};
 
 /// Settlement record
@@ -63,7 +63,7 @@ impl SettlementEngine {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Create a settlement from a channel
     pub fn create_settlement(&mut self, channel: &Channel) -> Result<Settlement> {
         let settlement = Settlement {
@@ -74,21 +74,23 @@ impl SettlementEngine {
             timestamp: Utc::now(),
             status: SettlementStatus::Pending,
         };
-        
+
         self.settlements.push(settlement.clone());
         Ok(settlement)
     }
-    
+
     /// Finalize a settlement
     pub fn finalize(&mut self, settlement_id: &str) -> Result<Settlement> {
-        let settlement = self.settlements.iter_mut()
+        let settlement = self
+            .settlements
+            .iter_mut()
             .find(|s| s.id == settlement_id)
             .ok_or_else(|| crate::error::Error::Settlement("Settlement not found".to_string()))?;
-        
+
         settlement.status = SettlementStatus::Finalized;
         Ok(settlement.clone())
     }
-    
+
     /// Create a dispute
     pub fn create_dispute(&self, channel_id: &str, reason: &str) -> Dispute {
         Dispute {
@@ -109,13 +111,13 @@ mod tests {
     #[test]
     fn test_settlement_creation() {
         let mut engine = SettlementEngine::new();
-        
+
         let party_a = Did::new("did:nexa:alice");
         let party_b = Did::new("did:nexa:bob");
         let channel = Channel::new("channel-1", party_a, party_b, 1000, 500);
-        
+
         let settlement = engine.create_settlement(&channel).unwrap();
-        
+
         assert_eq!(settlement.balance_a, 1000);
         assert_eq!(settlement.status, SettlementStatus::Pending);
     }

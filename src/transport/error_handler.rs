@@ -2,7 +2,7 @@
 //!
 //! Error handling, retry, and timeout management.
 
-use crate::error::{Error, Result};
+use crate::error::Error;
 use std::time::Duration;
 
 /// Retry policy
@@ -37,11 +37,11 @@ impl RetryPolicy {
             ..Default::default()
         }
     }
-    
+
     /// Get delay for a given attempt
     pub fn delay_for_attempt(&self, attempt: u32) -> Duration {
-        let delay = self.initial_delay.as_millis() as f32
-            * self.backoff_multiplier.powi(attempt as i32);
+        let delay =
+            self.initial_delay.as_millis() as f32 * self.backoff_multiplier.powi(attempt as i32);
         Duration::from_millis(delay.min(self.max_delay.as_millis() as f32) as u64)
     }
 }
@@ -70,17 +70,16 @@ impl ErrorHandler {
             retry_policy: RetryPolicy::default(),
         }
     }
-    
+
     /// Determine if an error should trigger a retry
     pub fn should_retry(&self, error: &Error, attempt: u32) -> bool {
         if attempt >= self.retry_policy.max_retries {
             return false;
         }
-        
-        matches!(error, 
-            Error::ConnectionFailed(_) |
-            Error::ConnectionTimeout(_) |
-            Error::Network(_)
+
+        matches!(
+            error,
+            Error::ConnectionFailed(_) | Error::ConnectionTimeout(_) | Error::Network(_)
         )
     }
 }
@@ -98,7 +97,7 @@ mod tests {
     #[test]
     fn test_retry_policy() {
         let policy = RetryPolicy::new(3);
-        
+
         assert_eq!(policy.max_retries, 3);
         assert!(policy.delay_for_attempt(0) < policy.delay_for_attempt(1));
     }
@@ -106,7 +105,7 @@ mod tests {
     #[test]
     fn test_error_handler() {
         let handler = ErrorHandler::new();
-        
+
         let retry_error = Error::ConnectionFailed("test".to_string());
         assert!(handler.should_retry(&retry_error, 0));
         assert!(!handler.should_retry(&retry_error, 3));

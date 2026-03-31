@@ -56,12 +56,12 @@ impl DagExecutor {
     pub fn new() -> Self {
         Self { entry: None }
     }
-    
+
     /// Set entry node
     pub fn set_entry(&mut self, node: DagNode) {
         self.entry = Some(node);
     }
-    
+
     /// Execute the DAG
     pub async fn execute(&self, _input: &str) -> Result<String> {
         // TODO: Implement actual DAG execution

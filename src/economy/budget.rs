@@ -54,32 +54,32 @@ impl BudgetController {
             status: HashMap::new(),
         }
     }
-    
+
     /// Check if a call is within budget
     pub fn check_budget(&self, did: &str, amount: u64) -> Result<()> {
         let status = self.status.get(did).cloned().unwrap_or_default();
-        
+
         if amount > self.limits.max_per_call {
             return Err(Error::BudgetExceeded(amount, self.limits.max_per_call));
         }
-        
+
         if status.spent_hour + amount > self.limits.max_per_hour {
             return Err(Error::BudgetExceeded(
                 status.spent_hour + amount,
                 self.limits.max_per_hour,
             ));
         }
-        
+
         if status.spent_day + amount > self.limits.max_per_day {
             return Err(Error::BudgetExceeded(
                 status.spent_day + amount,
                 self.limits.max_per_day,
             ));
         }
-        
+
         Ok(())
     }
-    
+
     /// Record spending
     pub fn record_spending(&mut self, did: &str, amount: u64) {
         let status = self.status.entry(did.to_string()).or_default();
@@ -87,14 +87,14 @@ impl BudgetController {
         status.spent_day += amount;
         status.spent_total += amount;
     }
-    
+
     /// Reset hourly budgets
     pub fn reset_hourly(&mut self) {
         for status in self.status.values_mut() {
             status.spent_hour = 0;
         }
     }
-    
+
     /// Reset daily budgets
     pub fn reset_daily(&mut self) {
         for status in self.status.values_mut() {
@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn test_budget_check() {
         let controller = BudgetController::new();
-        
+
         assert!(controller.check_budget("did:nexa:test", 50).is_ok());
         assert!(controller.check_budget("did:nexa:test", 200).is_err());
     }
@@ -125,9 +125,9 @@ mod tests {
     #[test]
     fn test_budget_recording() {
         let mut controller = BudgetController::new();
-        
+
         controller.record_spending("did:nexa:test", 100);
-        
+
         let status = controller.status.get("did:nexa:test").unwrap();
         assert_eq!(status.spent_total, 100);
     }

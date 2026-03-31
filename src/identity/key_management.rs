@@ -4,10 +4,10 @@
 //! Supports Ed25519 for signing and X25519 for key agreement.
 
 use crate::error::{Error, Result};
-use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey, Verifier};
-use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, StaticSecret};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
 use zeroize::Zeroize;
 
 // ============================================================================
@@ -23,14 +23,14 @@ impl PublicKey {
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.to_bytes()
     }
-    
+
     /// Create from bytes
     pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
-        let verifying_key = VerifyingKey::from_bytes(bytes)
-            .map_err(|e| Error::KeyGeneration(e.to_string()))?;
+        let verifying_key =
+            VerifyingKey::from_bytes(bytes).map_err(|e| Error::KeyGeneration(e.to_string()))?;
         Ok(Self(verifying_key))
     }
-    
+
     /// Get the inner key
     pub fn inner(&self) -> &VerifyingKey {
         &self.0
@@ -46,13 +46,13 @@ impl PrivateKey {
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.to_bytes()
     }
-    
+
     /// Create from bytes
     pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self> {
         let signing_key = SigningKey::from_bytes(bytes);
         Ok(Self(signing_key))
     }
-    
+
     /// Get the inner key
     pub fn inner(&self) -> &SigningKey {
         &self.0
@@ -71,42 +71,43 @@ impl KeyPair {
     pub fn generate() -> Result<Self> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let verifying_key = signing_key.verifying_key();
-        
+
         Ok(Self {
             private_key: PrivateKey(signing_key),
             public_key: PublicKey(verifying_key),
         })
     }
-    
+
     /// Create from existing private key bytes
     pub fn from_private_key(bytes: &[u8; 32]) -> Result<Self> {
         let signing_key = SigningKey::from_bytes(bytes);
         let verifying_key = signing_key.verifying_key();
-        
+
         Ok(Self {
             private_key: PrivateKey(signing_key),
             public_key: PublicKey(verifying_key),
         })
     }
-    
+
     /// Get the public key
     pub fn public_key(&self) -> &PublicKey {
         &self.public_key
     }
-    
+
     /// Get the private key
     pub fn private_key(&self) -> &PrivateKey {
         &self.private_key
     }
-    
+
     /// Sign a message
     pub fn sign(&self, message: &[u8]) -> Result<Signature> {
         Ok(self.private_key.0.sign(message))
     }
-    
+
     /// Verify a signature
     pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<()> {
-        self.public_key.0
+        self.public_key
+            .0
             .verify(message, signature)
             .map_err(|e| Error::SignatureVerification(e.to_string()))
     }
@@ -130,39 +131,39 @@ impl KeyAgreementKeyPair {
     pub fn generate() -> Result<Self> {
         let secret = StaticSecret::random_from_rng(OsRng);
         let public = X25519PublicKey::from(&secret);
-        
+
         Ok(Self {
             private_key: secret.to_bytes(),
             public_key: public.to_bytes(),
         })
     }
-    
+
     /// Create from existing private key bytes
     pub fn from_private_key(bytes: &[u8; 32]) -> Result<Self> {
         let secret = StaticSecret::from(*bytes);
         let public = X25519PublicKey::from(&secret);
-        
+
         Ok(Self {
             private_key: *bytes,
             public_key: public.to_bytes(),
         })
     }
-    
+
     /// Get the public key bytes
     pub fn public_key(&self) -> &[u8; 32] {
         &self.public_key
     }
-    
+
     /// Get the private key bytes
     pub fn private_key(&self) -> &[u8; 32] {
         &self.private_key
     }
-    
+
     /// Perform Diffie-Hellman key exchange
     pub fn diffie_hellman(&self, their_public: &[u8; 32]) -> Result<[u8; 32]> {
         let secret = StaticSecret::from(self.private_key);
         let their_public_key = X25519PublicKey::from(*their_public);
-        
+
         Ok(secret.diffie_hellman(&their_public_key).to_bytes())
     }
 }
@@ -201,10 +202,10 @@ impl IdentityKeys {
 pub struct KeyStorage {
     /// Encrypted private key
     encrypted_private_key: Vec<u8>,
-    
+
     /// Public key (not encrypted)
     public_key: Vec<u8>,
-    
+
     /// Encryption nonce
     nonce: Vec<u8>,
 }
@@ -220,11 +221,12 @@ impl KeyStorage {
             nonce: vec![0u8; 12],
         })
     }
-    
+
     /// Decrypt and recover key pair
     pub fn decrypt(&self, encryption_key: &[u8]) -> Result<KeyPair> {
         // TODO: Implement actual decryption
-        let bytes: [u8; 32] = self.encrypted_private_key
+        let bytes: [u8; 32] = self
+            .encrypted_private_key
             .as_slice()
             .try_into()
             .map_err(|_| Error::KeyGeneration("Invalid key length".to_string()))?;
@@ -246,7 +248,7 @@ mod tests {
     fn test_sign_verify() {
         let keypair = KeyPair::generate().unwrap();
         let message = b"Hello, Nexa-net!";
-        
+
         let signature = keypair.sign(message).unwrap();
         assert!(keypair.verify(message, &signature).is_ok());
     }
@@ -256,7 +258,7 @@ mod tests {
         let keypair = KeyPair::generate().unwrap();
         let message = b"Hello, Nexa-net!";
         let wrong_message = b"Wrong message";
-        
+
         let signature = keypair.sign(message).unwrap();
         assert!(keypair.verify(wrong_message, &signature).is_err());
     }

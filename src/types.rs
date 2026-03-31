@@ -15,12 +15,12 @@ impl Did {
     pub fn new(did: impl Into<String>) -> Self {
         Self(did.into())
     }
-    
+
     /// Get the DID string
     pub fn as_str(&self) -> &str {
         &self.0
     }
-    
+
     /// Check if this is a valid Nexa DID
     pub fn is_valid(&self) -> bool {
         self.0.starts_with("did:nexa:") && self.0.len() > 10

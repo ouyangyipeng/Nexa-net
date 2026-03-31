@@ -125,3 +125,12 @@ opt-level = 3
 [[bench]]
 name = "nexa_bench"
 harness = false
+
+# Examples
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
+
+[[example]]
+name = "embedding_usage"
+path = "examples/embedding_usage.rs"
