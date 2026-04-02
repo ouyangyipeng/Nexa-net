@@ -7,11 +7,11 @@
 //! - Payment channels
 
 use nexa_net::{
-    api::sdk::{CapabilityBuilder, DiscoveryFilters, NexaClient, NexaClientBuilder},
+    api::sdk::{CapabilityBuilder, NexaClientBuilder},
     discovery::capability::{CapabilityRegistry, QualityMetrics},
     economy::channel::ChannelManager,
-    identity::{Did, IdentityKeys, KeyPair},
-    types::{CapabilitySchema, EndpointDefinition, ServiceMetadata},
+    identity::IdentityKeys,
+    types::{Did, EndpointDefinition},
 };
 
 #[tokio::main]
@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Generate a new identity key pair
     let identity = IdentityKeys::generate()?;
-    let did = Did::parse("did:nexa:agent:example-agent")?;
+    let did = Did::new("did:nexa:agent:example-agent");
 
     println!("   Created DID: {}", did.as_str());
     println!(
@@ -119,8 +119,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut channel_manager = ChannelManager::default();
 
     // Create two parties
-    let party_a = Did::parse("did:nexa:agent:alice")?;
-    let party_b = Did::parse("did:nexa:agent:bob")?;
+    let party_a = Did::new("did:nexa:agent:alice");
+    let party_b = Did::new("did:nexa:agent:bob");
 
     // Open a payment channel
     let channel = channel_manager.open(

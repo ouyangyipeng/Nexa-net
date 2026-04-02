@@ -7,10 +7,9 @@
 //! - Using the vectorizer for discovery
 
 use nexa_net::{
-    discovery::embedding::{create_embedder, Embedder, EmbeddingConfig},
+    discovery::embedding::{create_embedder, EmbeddingConfig},
     discovery::semantic_dht::SemanticDHT,
-    discovery::vectorizer::{Vectorizer, VectorizerBuilder},
-    discovery::SemanticVector,
+    discovery::vectorizer::VectorizerBuilder,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n3. Vectorizer Usage...");
 
     // Create a vectorizer with mock embedder
-    let vectorizer = VectorizerBuilder::new().mock(384).build();
+    let vectorizer = VectorizerBuilder::new().mock(384).build()?;
 
     // Vectorize multiple texts
     let texts = vec![
@@ -112,7 +111,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (did, description) in &capabilities {
         let vector = vectorizer.vectorize(description)?;
-        dht.store(did.to_string(), vector);
+        let _ = dht.store(did.to_string(), vector);
     }
 
     println!("   Stored {} capabilities in DHT", capabilities.len());
@@ -152,15 +151,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n6. Configuration Options...");
 
     // ONNX configuration (requires model file)
-    let onnx_config = EmbeddingConfig::Onnx {
-        model_path: "./models/all-MiniLM-L6-v2.onnx".into(),
-        tokenizer_path: "./models/tokenizer.json".into(),
-        max_length: 256,
-    };
-    println!("   ONNX config: model at ./models/");
+    // Note: EmbeddingConfig::Onnx only has model_path and max_length fields
+    #[cfg(feature = "embedding-onnx")]
+    {
+        let _onnx_config = EmbeddingConfig::Onnx {
+            model_path: "./models/all-MiniLM-L6-v2.onnx".into(),
+            max_length: 256,
+        };
+        println!("   ONNX config: model at ./models/");
+    }
+
+    #[cfg(not(feature = "embedding-onnx"))]
+    {
+        println!("   ONNX config: not available (feature disabled)");
+    }
 
     // API configuration (requires API endpoint)
-    let api_config = EmbeddingConfig::Api {
+    let _api_config = EmbeddingConfig::Api {
         endpoint: "https://api.example.com/embeddings".to_string(),
         model: "text-embedding-ada-002".to_string(),
         api_key: std::env::var("EMBEDDING_API_KEY").ok(),
