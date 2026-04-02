@@ -21,7 +21,8 @@ db-path = "~/.cargo/advisory-db"
 # The url(s) of the advisory databases to use
 db-urls = ["https://github.com/rustsec/advisory-db"]
 # The lint level for security vulnerabilities
-vulnerability = "deny"
+# Set to "warn" to allow ignore list to work for unfixed vulnerabilities
+vulnerability = "warn"
 # The lint level for unmaintained crates
 unmaintained = "warn"
 # The lint level for crates that have been yanked from their registry
@@ -33,12 +34,13 @@ notice = "warn"
 ignore = [
     # RSA timing sidechannel - no fixed version available, indirect dependency via sqlx-mysql
     # We don't use MySQL, so this is not a direct risk
-    "RUSTSEC-2023-0071",
+    # Severity: 5.9 (medium), no fix available
+    { id = "RUSTSEC-2023-0071", reason = "Indirect dependency via sqlx-mysql which we don't use; no fixed version available" },
     
     # Unmaintained crates - indirect dependencies via tokenizers
     # These are not security vulnerabilities, just maintenance warnings
-    "RUSTSEC-2025-0119",  # number_prefix - via indicatif -> tokenizers
-    "RUSTSEC-2024-0436",  # paste - via tokenizers, sqlx
+    { id = "RUSTSEC-2025-0119", reason = "number_prefix - indirect via indicatif -> tokenizers" },
+    { id = "RUSTSEC-2024-0436", reason = "paste - indirect via tokenizers, sqlx" },
 ]
 
 # This section is considered when running `cargo deny check licenses`

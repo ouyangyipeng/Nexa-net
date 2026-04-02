@@ -222,12 +222,9 @@ impl Embedder for OnnxEmbedder {
         let attention_mask_shape = Shape::new(vec![1, token_count as i64]);
 
         // Create ONNX input values using (shape, data) tuple
-        let input_ids_value = Value::from_array((
-            input_ids_shape,
-            tokens.into_boxed_slice(),
-        ))
-        .map_err(|e| Error::Internal(format!("Failed to create input_ids value: {}", e)))?;
-        
+        let input_ids_value = Value::from_array((input_ids_shape, tokens.into_boxed_slice()))
+            .map_err(|e| Error::Internal(format!("Failed to create input_ids value: {}", e)))?;
+
         let attention_mask_value = Value::from_array((
             attention_mask_shape,
             attention_mask.clone().into_boxed_slice(),
@@ -235,10 +232,11 @@ impl Embedder for OnnxEmbedder {
         .map_err(|e| Error::Internal(format!("Failed to create attention_mask value: {}", e)))?;
 
         // Run inference - need to lock the session for mutable access
-        let mut session = self.session.lock().map_err(|_| {
-            Error::Internal("Failed to lock ONNX session".to_string())
-        })?;
-        
+        let mut session = self
+            .session
+            .lock()
+            .map_err(|_| Error::Internal("Failed to lock ONNX session".to_string()))?;
+
         let outputs = session
             .run(vec![
                 ("input_ids", input_ids_value),
