@@ -11,7 +11,7 @@ pub use crate::discovery::embedding::mock::MockEmbedder;
 pub use crate::discovery::embedding::{Embedder, EmbeddingConfig};
 
 #[cfg(feature = "embedding-onnx")]
-pub use crate::discovery::embedding::OnnxEmbedder;
+pub use crate::discovery::embedding::onnx::OnnxEmbedder;
 
 /// Semantic vector representation
 #[derive(Debug, Clone)]
