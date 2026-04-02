@@ -204,16 +204,14 @@ mod tests {
 
         let result = store
             .register_capability(crate::types::CapabilitySchema {
-                did: crate::types::Did::new("test:agent:example").unwrap(),
-                name: "test".to_string(),
-                metadata: crate::types::ServiceMetadata::default(),
+                version: "1.0".to_string(),
+                metadata: crate::types::ServiceMetadata {
+                    did: crate::types::Did::new("did:nexa:agent:example"),
+                    name: "test".to_string(),
+                    description: "Test service".to_string(),
+                    tags: vec![],
+                },
                 endpoints: vec![],
-                cost_model: crate::discovery::capability::CostModel::default(),
-                quality: crate::discovery::capability::QualityMetrics::default(),
-                rate_limit: crate::discovery::capability::RateLimit::default(),
-                tags: vec![],
-                created_at: chrono::Utc::now(),
-                updated_at: chrono::Utc::now(),
             })
             .await;
 
