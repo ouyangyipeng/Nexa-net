@@ -1,0 +1,19 @@
+\section{Conclusion}
+
+This paper presented Nexa-net, a decentralized agent communication network that addresses four critical gaps in the current agent infrastructure landscape: centralized dependency, semantic routing absence, economic incentive vacuum, and insecure authentication. Through a four-layer architecture---Identity \& Zero-Trust, Semantic Discovery \& Routing, Transport \& Protocol, Economy \& Micro-Transaction---Nexa-net provides a comprehensive protocol stack for autonomous agent interaction.
+
+The core contributions of this work are:
+
+\begin{enumerate}
+  \item A \emph{four-layer decentralized agent network architecture} that separates identity, discovery, transport, and economy into independent, evolvable layers, following the OSI model's separation-of-concerns principle while adapting each layer's design to the specific requirements of autonomous agent communication.
+
+  \item A \emph{HNSW-based semantic routing algorithm} that combines approximate nearest neighbor search with Kademlia DHT and multi-factor scoring (semantic similarity, quality, cost, load, latency), enabling intent-driven capability discovery at 31\textmu s latency---3,200$\times$ better than the target---and scaling sub-linearly from 100 to 10,000 indexed capabilities.
+
+  \item A \emph{Ed25519 + state channel zero-trust micro-transaction mechanism} using dual-signature MicroReceipts with SHA-256 hash chains, achieving 9.9M TPS for off-chain transfers while maintaining the balance invariant $b_A + b_B = \text{total\_deposit}$ through proptest-verified property testing.
+
+  \item A \emph{complete Rust implementation} with 485 tests (unit, integration, E2E, HTTP E2E, property-based) and 45 Criterion benchmarks, demonstrating production-grade performance across all modules and confirming that the architectural design translates into a working, testable, and measurable system.
+\end{enumerate}
+
+The Sidecar Proxy design philosophy---inspired by service mesh patterns but extended with semantic routing and economic settlement---ensures that agents join the network without code modifications, reducing adoption barriers from ``rewrite agent logic'' to ``deploy a proxy process.'' This non-invasive approach is critical for the heterogeneous agent ecosystem where LangChain, AutoGen, CrewAI, and custom agents must interoperate without conforming to a single framework's API.
+
+Nexa-net is released as open-source software under the MIT license, with the vision of becoming a community-driven infrastructure layer for the emerging agent economy. The codebase, documentation, benchmark scripts, and deployment configurations are available at the project repository, inviting contributions from researchers and practitioners in distributed systems, cryptographic identity, vector search, and micro-payment design. As autonomous agents become ubiquitous in research, industry, and daily life, the need for a decentralized, semantically-aware, economically-sustainable communication infrastructure will only grow---Nexa-net provides a foundational architecture for that future.

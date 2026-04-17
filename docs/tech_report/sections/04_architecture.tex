@@ -1,0 +1,116 @@
+\section{System Architecture Overview}
+
+\subsection{Design Philosophy}
+
+Nexa-net's architecture follows three guiding principles: \emph{non-invasive integration}, \emph{semantic-first routing}, and \emph{layered decomposition}. The non-invasive principle dictates that agents interact with Nexa-net through a local proxy---the agent merely calls \texttt{nexa\_network\_call(intent, data)} as a regular function, while the proxy transparently handles identity, discovery, transport, and economy. The semantic-first principle mandates that agents describe \emph{what they want} rather than \emph{where to find it}. The layered decomposition principle ensures that each protocol layer is self-contained with well-defined interfaces, following the OSI model's separation-of-concerns approach.
+
+\subsection{Four-Layer Architecture}
+
+Nexa-net's protocol stack comprises four layers, each addressing a distinct aspect of decentralized agent communication. Figure~\ref{fig:four-layer} illustrates the architecture.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[scale=0.85, every node/.style={font=\small}]
+  % Layer 4 - Economy
+  \draw[fill=nexa-orange!20, draw=nexa-orange, thick, rounded corners] (0,0) rectangle (10,2);
+  \node[font=\normalsize\bfseries] at (5,1.7) {Layer 4: Economy \& Micro-Transaction};
+  \node[font=\scriptsize] at (2.5,0.8) {State Channel};
+  \node[font=\scriptsize] at (5,0.8) {MicroReceipt};
+  \node[font=\scriptsize] at (7.5,0.8) {Token Engine};
+
+  % Layer 3 - Transport
+  \draw[fill=nexa-blue!20, draw=nexa-blue, thick, rounded corners] (0,2.2) rectangle (10,4.2);
+  \node[font=\normalsize\bfseries] at (5,3.9) {Layer 3: Transport \& Protocol};
+  \node[font=\scriptsize] at (2.5,3.0) {Handshake};
+  \node[font=\scriptsize] at (5,3.0) {Streaming RPC};
+  \node[font=\scriptsize] at (7.5,3.0) {Serialization};
+
+  % Layer 2 - Discovery
+  \draw[fill=nexa-green!20, draw=nexa-green, thick, rounded corners] (0,4.4) rectangle (10,6.4);
+  \node[font=\normalsize\bfseries] at (5,6.1) {Layer 2: Semantic Discovery \& Routing};
+  \node[font=\scriptsize] at (2.5,5.2) {Capability Schema};
+  \node[font=\scriptsize] at (5,5.2) {Semantic Router};
+  \node[font=\scriptsize] at (7.5,5.2) {DHT};
+
+  % Layer 1 - Identity
+  \draw[fill=nexa-purple!20, draw=nexa-purple, thick, rounded corners] (0,6.6) rectangle (10,8.6);
+  \node[font=\normalsize\bfseries] at (5,8.3) {Layer 1: Identity \& Zero-Trust};
+  \node[font=\scriptsize] at (2.5,7.4) {Nexa-DID};
+  \node[font=\scriptsize] at (5,7.4) {mTLS};
+  \node[font=\scriptsize] at (7.5,7.4) {VC};
+
+  % Sidecar Proxy wrapper
+  \draw[fill=gray!10, draw=gray, dashed, thick, rounded corners] (-0.3,-0.3) rectangle (10.3,8.9);
+  \node[font=\normalsize\bfseries, color=gray] at (5,-0.1) {Nexa-Proxy (Sidecar)};
+\end{tikzpicture}
+\caption{Nexa-net four-layer architecture with Sidecar Proxy boundary.}
+\label{fig:four-layer}
+\end{figure}
+
+\textbf{Layer 1 (Identity \& Zero-Trust)} establishes cryptographic identity through W3C-compatible DIDs with Ed25519 signing and X25519 key agreement. Every agent generates a \texttt{did:nexa:<hex>} identifier derived from SHA-256 of its Ed25519 public key, and publishes a DID Document containing verification methods and service endpoints. mTLS provides bidirectional authentication during connection establishment, and Verifiable Credentials enable capability attestation through a Trust Anchor chain.
+
+\textbf{Layer 2 (Semantic Discovery \& Routing)} transforms textual intent descriptions into 384-dimensional embedding vectors and indexes them in HNSW for sub-linear search. The Kademlia DHT distributes the routing table across the network, and the Semantic Router combines similarity scores with quality, cost, load, and latency factors into a multi-factor scoring formula to select optimal service providers.
+
+\textbf{Layer 3 (Transport \& Protocol)} implements a 12-byte binary frame format for efficient RPC communication, supporting four RPC patterns (Unary, Server-Stream, Client-Stream, Bidirectional). The SYN-NEXA/ACK-SCHEMA handshake negotiates protocol version, compression algorithm, and estimated cost before the first RPC call. Serialization supports JSON with LZ4/Zstd/Gzip compression pipelines.
+
+\textbf{Layer 4 (Economy \& Micro-Transaction)} manages state channels between paired agents, tracking off-chain transfers with dual-signature MicroReceipts and SHA-256 hash chains. BudgetController enforces per-call, per-channel, and per-agent budget limits to prevent resource abuse. SettlementEngine computes final balances when channels close, maintaining the invariant $b_A + b_B = \text{total\_deposit}$.
+
+\subsection{Sidecar Proxy Design}
+
+The Sidecar Proxy pattern, borrowed from service mesh architecture~\cite{envoy2017,istio2018}, is central to Nexa-net's non-invasive philosophy. Each agent runs a Nexa-Proxy process on the same host (or container), listening on a local port for agent requests. The proxy encapsulates all four layers in a single \texttt{ProxyState} container that holds references to the DID resolver, semantic router, RPC engine, and channel manager.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[scale=0.75, every node/.style={font=\small}]
+  % Agent A
+  \draw[fill=nexa-blue!30, draw=nexa-blue, thick, rounded corners] (0,3) rectangle (3,5);
+  \node[font=\bfseries] at (1.5,4) {Agent A};
+  \node[font=\scriptsize] at (1.5,3.5) {(LangChain)};
+
+  % Proxy A
+  \draw[fill=gray!20, draw=gray, thick, rounded corners] (0,0) rectangle (3,2.5);
+  \node[font=\bfseries] at (1.5,2.2) {Nexa-Proxy A};
+  \node[font=\scriptsize] at (1.5,1.5) {ProxyState};
+  \node[font=\scriptsize] at (1.5,0.8) {L1-L4};
+
+  % Agent B
+  \draw[fill=nexa-green!30, draw=nexa-green, thick, rounded corners] (9,3) rectangle (12,5);
+  \node[font=\bfseries] at (10.5,4) {Agent B};
+  \node[font=\scriptsize] at (10.5,3.5) {(AutoGen)};
+
+  % Proxy B
+  \draw[fill=gray!20, draw=gray, thick, rounded corners] (9,0) rectangle (12,2.5);
+  \node[font=\bfseries] at (10.5,2.2) {Nexa-Proxy B};
+  \node[font=\scriptsize] at (10.5,1.5) {ProxyState};
+  \node[font=\scriptsize] at (10.5,0.8) {L1-L4};
+
+  % Supernode
+  \draw[fill=nexa-orange!30, draw=nexa-orange, thick, rounded corners] (4.5,3.5) rectangle (7.5,5);
+  \node[font=\bfseries] at (6,4.5) {Supernode};
+  \node[font=\scriptsize] at (6,3.9) {Registry + Relay};
+
+  % Connections
+  \draw[->, thick, nexa-blue] (1.5,3) -- (1.5,2.5);
+  \node[font=\scriptsize, color=nexa-blue] at (2.2,2.7) {local call};
+
+  \draw[->, thick, nexa-green] (10.5,3) -- (10.5,2.5);
+  \node[font=\scriptsize, color=nexa-green] at (11.2,2.7) {local call};
+
+  \draw[<->, thick, nexa-purple] (3,1.3) -- (4.5,4);
+  \node[font=\scriptsize, color=nexa-purple] at (3.8,3) {SYN-NEXA};
+
+  \draw[<->, thick, nexa-red] (7.5,4) -- (9,1.3);
+  \node[font=\scriptsize, color=nexa-red] at (8.2,3) {mTLS RPC};
+
+  \draw[<->, dashed, gray] (1.5,0) -- (1.5,-0.5) -- (10.5,-0.5) -- (10.5,0);
+  \node[font=\scriptsize, color=gray] at (6,-0.8) {P2P Mesh (encrypted)};
+\end{tikzpicture}
+\caption{Agent--Proxy--Supernode interaction model. Each agent communicates with its local proxy; proxies negotiate with the supernode for discovery and with peer proxies for direct RPC.}
+\label{fig:proxy-model}
+\end{figure}
+
+The data flow for a typical agent request proceeds as follows (Figure~\ref{fig:proxy-model}): (1) Agent A calls \texttt{nexa\_network\_call("translate PDF", data)} on its local proxy; (2) Proxy A vectorizes the intent and queries the Semantic DHT for matching capabilities; (3) The DHT returns ranked candidates via the Semantic Router; (4) Proxy A initiates a SYN-NEXA handshake with Proxy B (the selected service provider's proxy); (5) Proxies negotiate compression, budget, and protocol version; (6) Proxy A opens a state channel with Proxy B for payment; (7) The RPC call is executed over mTLS with compressed serialization; (8) A MicroReceipt is signed by both proxies, and the channel balance is updated; (9) The result is returned to Agent A through its local proxy.
+
+\subsection{Component Interactions}
+
+The four layers interact through well-defined interfaces. Layer 1 provides DID resolution and VC verification services that Layers 2--4 consume for authentication. Layer 2 provides capability lookup services that Layer 3 uses to select communication targets. Layer 3 provides the RPC transport that Layer 4 uses for receipt exchange. This cascading dependency ensures that upper layers can function only when lower layers have established their guarantees---a form of protocol-level guard clause that enforces the zero-trust principle at every layer boundary.

@@ -1,0 +1,138 @@
+\appendix
+
+\section{Frame Protocol Format}
+
+The Nexa-net frame protocol uses a 12-byte header followed by a variable-length payload. The complete frame structure is shown in Table~\ref{tab:frame-full}.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}llllp{5cm}@{}}
+\toprule
+Offset & Size & Field & Value & Description \\
+\midrule
+0 & 2 & Magic & 0x4E58 & Frame identifier (``NX'' in ASCII) \\
+2 & 2 & Version & 0x0001 & Protocol version number \\
+4 & 1 & Type & enum & 0x01=SYN, 0x02=ACK, 0x03=DATA, 0x04=FIN, 0x05=RST \\
+5 & 1 & Flags & bitmask & Bits 0--2: compression (0=none, 1=LZ4, 2=Zstd, 3=Gzip); Bits 3--4: RPC mode (0=Unary, 1=Server-Stream, 2=Client-Stream, 3=Bidi) \\
+6 & 2 & Stream ID & uint16 & Multiplexed stream identifier (0 = control stream) \\
+8 & 4 & Length & uint32 & Payload length in bytes (0--65535) \\
+\bottomrule
+\end{tabular}
+\caption{Complete frame protocol header format.}
+\label{tab:frame-full}
+\end{table}
+
+The maximum payload size is 65535 bytes (64KB - 1). Larger messages are fragmented across multiple DATA frames on the same stream ID, with the FIN flag on the last frame indicating message completion. The control stream (Stream ID = 0) is reserved for SYN-NEXA/ACK-SCHEMA handshake messages and cannot carry RPC payloads.
+
+\section{Routing Score Formula Derivation}
+
+The multi-factor routing score formula (Equation~\ref{eq:routing}) is derived from the following design requirements:
+
+\textbf{Requirement R1}: The formula must produce a scalar score that can be compared across heterogeneous service providers.
+
+\textbf{Requirement R2}: Each factor must be normalized to [0, 1] so that no factor dominates by virtue of its absolute scale.
+
+\textbf{Requirement R3}: The formula must penalize services that are expensive, overloaded, or slow, even if they are semantically similar.
+
+\textbf{Requirement R4}: The weight system must be configurable for domain-specific tuning.
+
+Starting from R1, we define the composite score as a weighted linear combination:
+
+\begin{equation}
+S = \sum_{i=1}^{n} w_i \cdot f_i
+\end{equation}
+
+From R2, each factor $f_i$ is normalized:
+\begin{align}
+f_{\text{sim}} &= \text{sim} \in [0, 1] \quad \text{(cosine similarity)} \\
+f_{\text{qual}} &= Q \in [0, 1] \quad \text{(quality score)} \\
+f_{\text{cost}} &= \frac{C_{\max} - c}{C_{\max}} \in [0, 1] \quad \text{(normalized cost)} \\
+f_{\text{load}} &= \frac{L_{\max} - l}{L_{\max}} \in [0, 1] \quad \text{(normalized load)} \\
+f_{\text{lat}} &= \frac{T_{\max} - t}{T_{\max}} \in [0, 1] \quad \text{(normalized latency)}
+\end{align}
+
+From R3, cost, load, and latency factors use inverse normalization: higher cost/load/latency produces lower scores, ensuring that expensive, overloaded, or slow services are penalized.
+
+From R4, weights satisfy $\sum w_i = 1$ and each $w_i \geq 0$. The default weights ($w_{\text{sim}}=0.40, w_{\text{qual}}=0.25, w_{\text{cost}}=0.15, w_{\text{load}}=0.10, w_{\text{lat}}=0.10$) reflect the design priority: semantic match first, quality second, cost/load/latency as tiebreakers.
+
+\section{Receipt Hash Chain Algorithm}
+
+The MicroReceipt hash chain links receipts chronologically for integrity verification:
+
+\begin{enumerate}
+  \item Initialize: $\text{hash}_0 = \text{SHA-256}(\text{``NEXA-CHANNEL-OPEN''} + \text{channel\_id})$ (genesis hash).
+  \item For receipt $i$ ($i \geq 1$): $\text{receipt}_i.\text{previous\_hash} = \text{hash}_{i-1}$.
+  \item Compute: $\text{hash}_i = \text{SHA-256}(\text{serialize}(\text{receipt}_i))$ where $\text{serialize}$ includes all fields except $\text{payee\_signature}$.
+  \item The payee signs over $\text{receipt}_i + \text{hash}_i$, producing the dual-signature.
+\end{enumerate}
+
+Verification algorithm:
+\begin{enumerate}
+  \item For each receipt $i$ ($i = 1, \ldots, N$): compute $\text{hash}'_i = \text{SHA-256}(\text{serialize}(\text{receipt}_i))$.
+  \item Check: $\text{receipt}_i.\text{previous\_hash} = \text{hash}'_{i-1}$ for all $i \geq 2$.
+  \item Check: $\text{receipt}_1.\text{previous\_hash} = \text{hash}_0$ (genesis).
+  \item Check: dual-signature verification on each receipt.
+  \item Check: sequence numbers are strictly monotonically increasing.
+\end{enumerate}
+
+If any check fails at position $i$, the chain is broken at $i$. The settlement algorithm uses receipts $1, \ldots, i-1$ (the last known good segment) and discards $i, \ldots, N$.
+
+\section{Test List Summary}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}llr@{}}
+\toprule
+Module & Test File & Count \\
+\midrule
+Identity & src/identity/* & 85 \\
+Discovery & src/discovery/* & 72 \\
+Transport & src/transport/* & 58 \\
+Economy & src/economy/* & 65 \\
+Security & src/security/* & 42 \\
+Storage & src/storage/* & 28 \\
+Proxy/API & src/proxy/*, src/api/* & 35 \\
+Protocol & src/protocol/* & 48 \\
+\midrule
+Integration & tests/integration/* & 31 \\
+E2E & tests/e2e\_test.rs & 10 \\
+HTTP E2E & tests/e2e\_http\_test.rs & 5 \\
+Proptest & proptest regressions & 6 \\
+\midrule
+\textbf{Total} & & \textbf{485} \\
+\bottomrule
+\end{tabular}
+\caption{Test count by module and test type.}
+\label{tab:test-list}
+\end{table}
+
+\section{Code Repository Structure}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lp{6cm}@{}}
+\toprule
+Path & Description \\
+\midrule
+src/identity/ & DID, DID Document, key management, VC, mTLS, resolver, trust anchor \\
+src/discovery/ & Capability schema, semantic router, DHT, vectorizer, embedding (Mock/ONNX) \\
+src/transport/ & Frame protocol, stream state machine, RPC, negotiator, serialization \\
+src/economy/ & State channel, receipt, budget controller, settlement engine, token engine \\
+src/security/ & Audit logger, key rotation, rate limiter, secure storage, middleware \\
+src/storage/ & Memory store, feature-gated RocksDB/PostgreSQL/Redis backends \\
+src/proxy/ & Proxy state, REST server, gRPC service, config, client \\
+src/api/ & REST handlers, gRPC health service, SDK client \\
+src/protocol/ & Protobuf definitions, message types \\
+src/nexa/ & DAG executor, runtime, network bridge \\
+benches/ & Criterion benchmarks (45 benchmarks, 8 modules) \\
+tests/ & E2E, integration, HTTP E2E, common test infrastructure \\
+proto/ & Protobuf schema definitions (5 .proto files) \\
+config/ & Proxy configuration (nexa-proxy.toml) \\
+deployments/ & Docker, Kubernetes, database migrations \\
+\bottomrule
+\end{tabular}
+\caption{Code repository structure overview.}
+\label{tab:code-structure}
+\end{table}

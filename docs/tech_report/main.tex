@@ -1,0 +1,96 @@
+\documentclass[sigconf,nonacm]{acmart}
+
+% === Packages ===
+\usepackage{amsmath}
+% amssymb omitted: \Bbbk conflicts with newtxmath in acmart
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,fit,calc,decorations.pathreplacing}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{cleveref}
+
+% === Listings style for Rust ===
+% Rust language definition for listings
+\lstdefinelanguage{Rust}{
+  morekeywords={as, break, const, continue, crate, else, enum, extern, false,
+    fn, for, if, impl, in, let, loop, match, mod, move, mut, pub, ref, return,
+    self, Self, static, struct, super, trait, true, type, unsafe, use, where,
+    while, async, await, dyn, abstract, become, box, do, final, macro,
+    macro_rules, override, priv, try, typeof, unsized, virtual, yield},
+  morekeywords=[2]{u8, u16, u32, u64, u128, i8, i16, i32, i64, i128,
+    f32, f64, bool, char, str, String, Vec, Option, Result, Box, Rc, Arc,
+    Duration, HashMap, DashMap, Self, pub, async, await, true, false},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+  morestring=[b]',
+}
+
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{blue}\bfseries,
+  keywordstyle=[2]{\color{teal}\bfseries},
+  commentstyle=\color{gray},
+  stringstyle=\color{orange},
+  breaklines=true,
+  frame=single,
+  language=Rust,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  xleftmargin=2em,
+  framexleftmargin=1.5em,
+}
+
+% === Custom colors ===
+\definecolor{nexa-blue}{RGB}{33,150,243}
+\definecolor{nexa-green}{RGB}{76,175,80}
+\definecolor{nexa-red}{RGB}{244,67,54}
+\definecolor{nexa-orange}{RGB}{255,152,0}
+\definecolor{nexa-purple}{RGB}{156,39,176}
+
+% === Title ===
+\title{Nexa-net: A Decentralized Agent Communication Network with Semantic Routing, Zero-Trust Identity, and Micro-Transaction Economy}
+
+\author{Owen Zhang}
+\affiliation{%
+  \institution{Nexa-net Project}
+  \city{Beijing}
+  \country{China}
+}
+
+\begin{document}
+
+% Abstract must be before \maketitle in acmart
+\input{sections/01_abstract}
+
+\maketitle
+
+% === Sections via input files ===
+\input{sections/02_introduction}
+\input{sections/03_background}
+\input{sections/04_architecture}
+\input{sections/05_identity}
+\input{sections/06_discovery}
+\input{sections/07_transport}
+\input{sections/08_economy}
+\input{sections/09_proxy}
+\input{sections/10_security}
+\input{sections/11_storage}
+\input{sections/12_testing}
+\input{sections/13_performance}
+\input{sections/14_discussion}
+\input{sections/15_conclusion}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\input{sections/16_appendix}
+
+\end{document}

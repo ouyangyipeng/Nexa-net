@@ -1,0 +1,57 @@
+\section{Storage Layer}
+
+\subsection{MemoryStore: DashMap-Based In-Memory Storage}
+
+The default storage backend is \texttt{MemoryStore}, an in-memory implementation using DashMap~\cite{dashmap2022} for concurrent access. MemoryStore manages three primary data collections:
+
+\begin{itemize}
+  \item \textbf{capabilities}: A DashMap mapping DID $\rightarrow$ CapabilitySchema, storing all registered agent capabilities. Capability lookup benchmarks at 117.27\textit{ns}---negligible overhead for the discovery pipeline. Registration benchmarks at approximately 1\textmu s per capability.
+  \item \textbf{channels}: A DashMap mapping channel\_id $\rightarrow$ StateChannel, storing all active state channels. Channel creation via the ChannelManager benchmarks at 328.17\textit{ns}.
+  \item \textbf{cache}: A DashMap-based LRU cache for DID Documents, resolved capabilities, and routing results. The cache set+get cycle benchmarks at 722.65\textit{ns}.
+\end{itemize}
+
+The DashMap-based implementation eliminated \texttt{RwLock<HashMap>} contention that was present in earlier iterations. Under concurrent access patterns (multiple agents registering and discovering simultaneously), the DashMap approach provides lock-free reads and sharded writes, ensuring that no single agent's write operation blocks other agents' reads.
+
+\subsection{Feature-Gated Persistent Backends}
+
+Nexa-net provides three feature-gated persistent storage backends, activated through Cargo feature flags:
+
+\textbf{RocksDB}~\cite{rocksdb2014} (\texttt{storage-rocksdb} feature): A high-performance embedded key-value store optimized for fast storage environments. RocksDB provides LSM-tree-based storage with bloom filters for efficient point lookups. This backend is suitable for single-proxy deployments where persistence is needed without external database dependencies.
+
+\textbf{PostgreSQL} (\texttt{storage-postgres} feature): A relational database backend using the \texttt{sqlx} crate for async query execution. PostgreSQL provides ACID transactions for channel state and receipt storage, ensuring durability across proxy restarts. The initial schema is defined in \texttt{deployments/database/migrations/001\_initial\_schema.sql}.
+
+\textbf{Redis}~\cite{redis2009} (\texttt{storage-redis} feature): An in-memory data structure store with optional persistence. Redis provides sub-millisecond latency for DID Document caching and capability lookups, making it suitable for distributed proxy deployments where multiple proxies share a common cache layer.
+
+\subsection{Storage Trait Abstraction}
+
+All backends implement the \texttt{Storage} trait, providing a unified interface that enables seamless backend switching:
+
+\begin{lstlisting}[language=Rust, caption={Storage trait definition.}]
+pub trait Storage: Send + Sync {
+    async fn register_capability(
+        &self, did: &DID, cap: CapabilitySchema
+    ) -> Result<(), StorageError>;
+    async fn get_capability(
+        &self, did: &DID
+    ) -> Result<Option<CapabilitySchema>, StorageError>;
+    async fn unregister_capability(
+        &self, did: &DID
+    ) -> Result<(), StorageError>;
+    async fn store_channel(
+        &self, channel: &StateChannel
+    ) -> Result<(), StorageError>;
+    async fn get_channel(
+        &self, id: &ChannelId
+    ) -> Result<Option<StateChannel>, StorageError>;
+    async fn cache_set(
+        &self, key: &str, value: &[u8], ttl: Duration
+    ) -> Result<(), StorageError>;
+    async fn cache_get(
+        &self, key: &str
+    ) -> Result<Option<Vec<u8>>, StorageError>;
+}
+\end{lstlisting}
+
+The trait's \texttt{Send + Sync} bounds ensure that all storage implementations can be shared across Tokio tasks. The \texttt{StorageError} enum provides typed error classification (NotFound, AlreadyExists, ConnectionFailed, SerializationError, etc.) for proper error handling in upper layers.
+
+The CRUD cycle benchmarks validate the storage abstraction: 829.21\textit{ns} for 1 capability (register + get + unregister), 8.43\textmu s for 10 capabilities ($\approx$840\textit{ns} per capability), and 92.47\textmu s for 100 capabilities ($\approx$925\textit{ns} per capability). The slight per-capability increase at scale reflects DashMap's internal resizing overhead, which amortizes to near-zero once the map reaches steady-state capacity.

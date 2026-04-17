@@ -1,0 +1,71 @@
+\section{Background and Related Work}
+
+\subsection{Agent Frameworks}
+
+The landscape of agent orchestration frameworks has expanded rapidly with the maturation of LLM capabilities. \textbf{AutoGen}~\cite{wu2023autogen} introduced a multi-agent conversation framework where agents exchange messages through a centralized orchestrator. While flexible in defining agent roles and conversation patterns, AutoGen relies on a hub-and-spoke communication model where all messages route through the orchestrator, creating a bottleneck and single-point failure.
+
+\textbf{CrewAI}~\cite{crewai2024} organizes agents into ``crews'' with defined roles, goals, and tools. Its sequential and hierarchical process flows provide structure, but again depend on a central crew manager for task delegation and result aggregation. CrewAI agents cannot discover each other dynamically or negotiate protocols independently.
+
+\textbf{LangChain}~\cite{chase2022langchain} provides a composable toolkit for building LLM applications, including chains, agents, and memory modules. LangChain's agent executor pattern (observe $\rightarrow$ think $\rightarrow$ act $\rightarrow$ observe) is powerful for single-agent reasoning, but multi-agent coordination requires external orchestration via LangGraph---a stateful graph executor that still operates within a centralized process boundary.
+
+\textbf{OpenAI Swarm}~\cite{openai2024swarm} is a lightweight experimental framework for multi-agent orchestration using routine handoffs and function calls. Swarm agents transfer control by returning ``handoff'' directives, but this mechanism operates within a single OpenAI API session, inheriting all the platform's latency, cost, and availability constraints.
+
+\textbf{Microsoft Semantic Kernel}~\cite{microsoft2023semantickernel} integrates LLMs with conventional programming languages through a planner-connector pattern. While it supports native function invocation and plan execution, Semantic Kernel agents communicate through in-memory function calls rather than network protocols, limiting cross-organizational collaboration.
+
+The common limitation across these frameworks is \emph{centralized communication}. No framework provides decentralized identity, semantic service discovery, or economic settlement---the three pillars required for autonomous agents to form a self-sustaining network without human intervention.
+
+\subsection{Peer-to-Peer Networks}
+
+\textbf{BitTorrent}~\cite{cohen2003bittorrent} pioneered incentive-driven P2P file sharing through its tit-for-tat piece exchange protocol. While BitTorrent demonstrates that economic incentives can sustain a decentralized network, its chunk-level bartering model is unsuitable for agent service payments, which require fine-grained token accounting rather than piece-for-piece exchange.
+
+\textbf{IPFS}~\cite{benet2014ipfs} provides content-addressed distributed storage using a Merkle DAG structure and BitSwap incentive protocol. IPFS excels at static content distribution but lacks dynamic service discovery---an IPFS CID identifies fixed content, not a live service capability. IPFS also inherits BitSwap's limitation of content-level exchange rather than monetary settlement.
+
+\textbf{Kademlia}~\cite{maymounkov2002kademlia} is the de facto standard DHT protocol, used in BitTorrent, IPFS, and Ethereum's devp2p network. Its XOR metric for node distance and iterative lookup procedure provide efficient $O(\log N)$ routing. Nexa-net adopts Kademlia's routing table structure for the Semantic DHT layer but extends it with vector-based semantic proximity---a Kademlia node is ``close'' not only in XOR distance but also in embedding-space similarity.
+
+\textbf{Chord}~\cite{stoica2001chord} and \textbf{Pastry}~\cite{rowstron2001pastry} provide alternative DHT designs with consistent hashing and leaf-set routing, respectively. While these protocols offer strong theoretical guarantees, Kademlia's simplicity and wide deployment make it a more practical foundation for Nexa-net's DHT layer.
+
+\subsection{Service Discovery}
+
+\textbf{Consul}~\cite{consul2015} provides service discovery through DNS and HTTP interfaces, backed by a Raft~\cite{ongaro2014raft}-based consensus protocol for catalog consistency. Consul's service registration includes health checks and metadata tags, but tags are flat strings---there is no semantic matching mechanism. An agent must specify exact service names rather than describing its intent.
+
+\textbf{etcd}~\cite{etcd2016} is a distributed key-value store used by Kubernetes for service discovery and configuration. etcd's watch-based notification system enables reactive service registration, but its key-based lookup model provides no semantic understanding of service capabilities.
+
+Traditional DNS-based discovery (SRV records) operates at even lower semantic resolution, mapping domain names to IP:port pairs. None of these systems can answer the query: ``Find me the cheapest translation service that handles PDF format and outputs Chinese.''
+
+\subsection{Semantic Search and Vector Indexing}
+
+\textbf{HNSW}~\cite{malkov2018hnsw} (Hierarchical Navigable Small World) is the state-of-the-art approximate nearest neighbor (ANN) algorithm. Its multi-layer navigable small world graph structure achieves recall rates exceeding 95\% at query latencies of 25--46\textmu s for indexes of 100--10,000 vectors. Nexa-net's Semantic Router builds on HNSW for capability vector indexing, augmented with SIMD-optimized cosine distance computation in pure f32 arithmetic.
+
+\textbf{FAISS}~\cite{johnson2019faiss} (Facebook AI Similarity Search) provides GPU-accelerated ANN search for billion-scale indexes. While FAISS excels at batch indexing and search on GPU hardware, its CPU-only mode lacks the low-latency single-query performance needed for real-time agent routing. HNSW offers superior single-query latency on CPU, making it more suitable for Nexa-net's proxy-side routing decisions.
+
+\textbf{word2vec}~\cite{mikolov2013word2vec}, \textbf{BERT}~\cite{devlin2019bert}, and \textbf{sentence-transformers}~\cite{reimers2019sentence} provide the embedding models that transform text descriptions into high-dimensional vectors. Nexa-net's vectorizer module supports both a Mock embedder (for testing) and an ONNX Runtime~\cite{onnxruntime2021} embedder (for production), enabling 384-dimensional embeddings at 5.64\textmu s per text (mock) or production-grade latency with pre-trained sentence-BERT models.
+
+\textbf{Annoy}~\cite{spotify2019annoy} and \textbf{ScaNN}~\cite{google2020scann} provide alternative ANN implementations. Annoy uses random projection trees for static indexes, while ScaNN achieves higher throughput through anisotropic quantization. For Nexa-net's use case---dynamic indexes where capabilities are registered and unregistered frequently---HNSW's support for incremental insertion makes it the clear choice over static-index approaches.
+
+\subsection{Micro-Payment Systems}
+
+\textbf{Bitcoin Lightning Network}~\cite{lightning2016} pioneered the state channel concept for Bitcoin, enabling off-chain micropayments with on-chain settlement guarantees. Lightning's Hash-Time-Locked Contracts (HTLCs) provide atomic routing across multiple hops, but its channel opening requires on-chain transactions (10+ minute confirmation time), making it unsuitable for the rapid channel establishment needed in agent networks.
+
+\textbf{Raiden Network}~\cite{raiden2017} extends state channels to Ethereum~\cite{buterin2014ethereum}, supporting ERC-20 token transfers with mediated paths. Raiden shares Lightning's limitation of on-chain channel opening, but its smart contract flexibility allows more sophisticated settlement conditions.
+
+Nexa-net's state channel design draws from Lightning and Raiden's architectural patterns but operates at a different abstraction level. Rather than anchoring channels to a blockchain, Nexa-net channels are anchored to \emph{cryptographic receipts}---each MicroReceipt carries dual Ed25519 signatures and a SHA-256 hash chain link. Settlement occurs when the channel closes and the final state is submitted to a SettlementEngine. This approach trades on-chain verifiability for latency optimization, achieving 9.9M TPS compared to Lightning's theoretical 10K TPS.
+
+\subsection{Zero-Trust and SPIFFE}
+
+\textbf{SPIFFE}~\cite{spiffe2020} (Secure Production Identity Framework for Everyone) defines a standard for service identity in dynamic environments. SPIFFE's SVID (X.509 certificate + URI SAN) model is conceptually aligned with Nexa-net's DID-based identity, but SPIFFE assumes a centralized Workload API that attests identities---a design that conflicts with Nexa-net's self-sovereign identity principle where agents generate and control their own DIDs without a central attestation authority.
+
+\textbf{BeyondCorp}~\cite{ward2016beyondcorp} (Google's zero-trust implementation) shifts access validation from network perimeter to individual device and user identity. While BeyondCorp demonstrates that zero-trust is feasible at enterprise scale, it depends on Google's internal identity federation---a centralized trust anchor. Nexa-net distributes trust anchors across multiple independent entities, requiring only DID Document signature verification rather than centralized attestation.
+
+\textbf{NIST Zero Trust Architecture}~\cite{nist2020zerotrust} (SP 800-207) formalizes zero-trust principles: never trust, always verify; least privilege access; assume breach. Nexa-net implements all three principles: every RPC call requires DID verification and mTLS; Verifiable Credentials~\cite{w3c_vc_2022} enforce least privilege; and the AuditLogger records all interactions for post-breach forensics.
+
+\subsection{Sidecar Proxy and Service Mesh}
+
+\textbf{Envoy}~\cite{envoy2017} pioneered the sidecar proxy pattern for microservice communication, providing L7 load balancing, mTLS termination, and observability without application code changes. \textbf{Istio}~\cite{istio2018} orchestrates Envoy sidecars through a centralized control plane (Pilot for routing, Citadel for identity, Galley for config). \textbf{Linkerd}~\cite{linkerd2018} offers a lighter-weight alternative with similar sidecar architecture.
+
+Nexa-net adopts the sidecar pattern from service mesh literature but diverges in three key aspects: (1) the proxy handles \emph{semantic routing} rather than URL-based load balancing; (2) the proxy implements \emph{economic settlement}---no service mesh charges for API calls; (3) the proxy uses \emph{decentralized identity} (DID) rather than centralized certificate authority (Istio Citadel).
+
+\subsection{DID and Verifiable Credentials}
+
+\textbf{W3C DID Core}~\cite{w3c_did_2022} defines a universal identifier format (\texttt{did:method:identifier}) with resolution to DID Documents containing verification methods, service endpoints, and key agreement protocols. Nexa-net's DID implementation (\texttt{did:nexa:<hex>}) follows W3C DID syntax with Ed25519 verification keys and X25519 key agreement keys.
+
+\textbf{W3C Verifiable Credentials}~\cite{w3c_vc_2022} provide a standard for expressing credentials with cryptographic proofs of issuer authenticity. Nexa-net uses VCs for capability attestation---a Trust Anchor issues a VC confirming that a service provider's claimed capabilities (e.g., ``translation accuracy 0.95'' or ``latency 2000ms'') have been verified. This creates a trust chain from the agent's DID to its claimed capabilities without requiring a central registry.

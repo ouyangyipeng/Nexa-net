@@ -1,0 +1,39 @@
+\section{Introduction}
+
+\subsection{The Agent Communication Crisis}
+
+The rapid advancement of Large Language Models (LLMs) has catalyzed an explosion of autonomous agents---software entities that perceive, reason, and act independently. From OpenAI's GPT-based toolchains~\cite{openai2024swarm} to multi-agent orchestration frameworks like AutoGen~\cite{wu2023autogen} and CrewAI~\cite{crewai2024}, agents are increasingly expected to collaborate: translating documents, extracting metrics, summarizing research, and orchestrating complex workflows across organizational boundaries.
+
+However, the infrastructure supporting agent-to-agent (A2A) communication remains fundamentally inadequate. Current approaches suffer from four critical limitations:
+
+\textbf{Centralized dependency.} Most agent frameworks route communication through centralized APIs---OpenAI's platform, LangChain Hub~\cite{chase2022langchain}, or proprietary middleware. This creates single-point failures: when the central service goes down, all dependent agents become unreachable. The 2023 OpenAI API outage rendered thousands of production pipelines inoperative, exposing the fragility of this model.
+
+\textbf{Semantic routing absence.} Traditional service discovery relies on DNS and exact URL matching~\cite{consul2015,etcd2016}. An agent seeking ``document translation with format preservation'' must know the precise endpoint of a translation service, rather than describing its intent and letting the infrastructure discover the best match. This forces human operators to manually configure service addresses---a process that is antithetical to autonomous operation.
+
+\textbf{Economic incentive vacuum.} Decentralized networks cannot rely on free labor. When Agent A calls Agent B's translation service, who pays? Without a native micro-transaction mechanism~\cite{nakamoto2008bitcoin}, service providers lack economic motivation to offer high-quality capabilities, and consumers lack budget guardrails to prevent runaway recursive calls (e.g., Agent A $\rightarrow$ B $\rightarrow$ A $\rightarrow$ B $\ldots$).
+
+\textbf{Insecure authentication.} API keys are the predominant authentication mechanism for machine-to-machine (M2M) communication. Yet API keys require human distribution, are vulnerable to leakage, and cannot support dynamic trust relationships between autonomous entities. A zero-trust architecture~\cite{nist2020zerotrust,ward2016beyondcorp} demands cryptographic identity verification at every interaction.
+
+\subsection{Nexa-net: The Sidecar Proxy Approach}
+
+Nexa-net addresses these four limitations through a \emph{non-invasive Sidecar Proxy} architecture. Inspired by the service mesh pattern~\cite{envoy2017,istio2018,linkerd2018} where Envoy/Istio proxies mediate microservice communication without modifying application code, Nexa-net deploys a lightweight proxy process alongside each agent. The agent treats the proxy as a local tool---\texttt{nexa\_network\_call}---and the proxy handles identity verification, semantic routing, protocol negotiation, encrypted transport, and economic settlement transparently.
+
+This design philosophy yields a critical advantage: \emph{agents join the network without code modifications}. A LangChain agent, an AutoGen agent, or a custom Python script all connect through the same proxy interface, forming a heterogeneous yet interoperable network.
+
+\subsection{Core Contributions}
+
+This paper presents the following contributions:
+
+\begin{enumerate}[label=\textbf{C\arabic*.}]
+  \item \textbf{Four-layer decentralized agent network architecture.} We define a layered protocol stack---Identity \& Zero-Trust, Semantic Discovery \& Routing, Transport \& Protocol, Economy \& Micro-Transaction---where each layer provides self-contained services with clear interfaces, enabling independent evolution and replacement.
+
+  \item \textbf{HNSW-based semantic routing algorithm.} We combine HNSW approximate nearest neighbor search~\cite{malkov2018hnsw} with Kademlia DHT~\cite{maymounkov2002kademlia} and a multi-factor scoring formula (semantic similarity $\times$ quality score $\times$ cost factor $\times$ load penalty $\times$ latency penalty) to enable intent-driven capability discovery that scales sub-linearly.
+
+  \item \textbf{Ed25519 + state channel zero-trust micro-transaction mechanism.} We design a state channel lifecycle with dual-signature MicroReceipts~\cite{lightning2016} and SHA-256 hash chains, achieving 9.9M TPS for off-chain transfers while maintaining the balance invariant $b_A + b_B = \text{total\_deposit}$.
+
+  \item \textbf{Complete Rust implementation with 485 tests and 45 benchmarks.} The system is implemented in Rust~\cite{rust2010} with Tokio async runtime~\cite{tokio2022}, DashMap lock-free concurrency~\cite{dashmap2022}, and ed25519-dalek cryptographic signatures~\cite{ed25519dalek2022}. The test suite covers unit (433), integration (31), E2E (10), HTTP E2E (5), and property-based (6) testing, while Criterion benchmarks~\cite{criterion2022} validate performance across 8 modules.
+\end{enumerate}
+
+\subsection{Paper Organization}
+
+The remainder of this paper is organized as follows. Section~3 reviews related work across agent frameworks, P2P networks, semantic search, and micro-payment systems. Section~4 presents the system architecture overview. Sections~5--8 detail each of the four protocol layers. Sections~9--11 cover the Proxy/API, Security, and Storage subsystems. Sections~12 and~13 present the testing methodology and performance analysis. Section~14 discusses limitations and future directions, and Section~15 concludes.

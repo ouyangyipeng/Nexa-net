@@ -1,0 +1,105 @@
+\section{Layer 3: Transport and Protocol}
+
+\subsection{12-Byte Binary Frame Format}
+
+Nexa-net's transport layer uses a compact 12-byte binary frame header for efficient message encapsulation. The frame format is designed for minimal parsing overhead while supporting variable-length payloads up to 64KB per frame.
+
+The 12-byte header structure is:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}llll@{}}
+\toprule
+Offset & Size & Field & Description \\
+\midrule
+0 & 2 bytes & Magic & Frame identifier (0x4E58 = ``NX'' in ASCII) \\
+2 & 2 bytes & Version & Protocol version (currently 0x0001) \\
+4 & 1 byte & Type & Message type (SYN, ACK, DATA, FIN, RST) \\
+5 & 1 byte & Flags & Compression type + RPC mode flags \\
+6 & 2 bytes & Stream ID & Multiplexed stream identifier \\
+8 & 4 bytes & Length & Payload length (0--65535 bytes) \\
+\bottomrule
+\end{tabular}
+\caption{12-byte frame header structure.}
+\label{tab:frame-format}
+\end{table}
+
+Frame header encoding benchmarks at 12\textit{ns} and decoding at 2\textit{ns}---near-zero overhead. Combined encode+decode throughput exceeds 15 GiB/s for typical payloads (1KB--10KB), making the frame protocol a negligible component of the total RPC latency. The total frame processing time (header + payload) ranges from 48\textit{ns} for 100-byte payloads to 3.58\textmu s for 64KB payloads.
+
+\subsection{Multiplexed Stream State Machine}
+
+Each proxy-to-proxy connection supports multiple concurrent RPC calls through multiplexed streams. A stream is identified by a 16-bit Stream ID and progresses through four states:
+
+\begin{enumerate}
+  \item \textbf{Idle}: The stream has not been used; no resources allocated.
+  \item \textbf{Open}: Both sides can send DATA frames; the RPC call is active.
+  \item \textbf{HalfClosed}: One side has sent FIN; the other side may still send DATA frames for streaming responses.
+  \item \textbf{Closed}: Both sides have sent FIN; all stream resources are released.
+\end{enumerate}
+
+The stream state machine enforces strict transition rules: a stream cannot skip the Open state, and HalfClosed can transition only to Closed. Invalid transitions (e.g., sending DATA on a Closed stream) trigger a RST frame that immediately terminates the stream and releases all associated buffers. This state machine design mirrors HTTP/2~\cite{rfc7540}'s stream lifecycle but simplifies the flow control mechanism---Nexa-net relies on per-stream budget limits (Layer 4) rather than window-update frames.
+
+\subsection{RPC Communication Patterns}
+
+Nexa-net supports four RPC patterns, each suited to different agent interaction models:
+
+\textbf{Unary RPC}: A single request--response exchange. The caller sends one DATA frame with the request payload, the responder sends one DATA frame with the response, and both sides send FIN. This pattern is used for simple tool calls (e.g., ``translate this sentence'' $\rightarrow$ ``translated result'').
+
+\textbf{Server-Stream RPC}: The caller sends one request, and the responder sends multiple DATA frames followed by FIN. This pattern is used for progressive results (e.g., ``summarize this document'' $\rightarrow$ streaming summary chunks). Each DATA frame carries a partial result, enabling the caller to process intermediate output before the complete response arrives.
+
+\textbf{Client-Stream RPC}: The caller sends multiple DATA frames followed by FIN, and the responder sends one aggregated response. This pattern is used for batched input (e.g., ``translate these 10 documents one by one'' $\rightarrow$ ``all translations complete''). The responder accumulates input frames and produces a single result after the client stream closes.
+
+\textbf{Bidirectional-Stream RPC}: Both sides send multiple DATA frames, enabling real-time interaction. This pattern is used for conversational agents (e.g., ``discuss this research topic'' $\rightarrow$ back-and-forth dialogue). Each DATA frame is processed independently, and the conversation ends when both sides send FIN.
+
+\subsection{SYN-NEXA/ACK-SCHEMA Protocol Negotiation}
+
+Before the first RPC call, proxies must negotiate protocol parameters. The SYN-NEXA/ACK-SCHEMA handshake completes within the initial 50\textit{ms} of connection establishment:
+
+\textbf{SYN-NEXA} (initiated by caller): Contains the intent hash (for routing validation), maximum budget (in NEXA tokens), supported protocol versions, compression algorithms (LZ4, Zstd, Gzip, none), and client capabilities (max concurrent streams, max message size, streaming support).
+
+\textbf{ACK-SCHEMA} (responded by service provider): Contains the selected protocol version and compression algorithm (chosen from the intersection of both sides' supported sets), the schema hash (for input/output schema verification), the estimated cost for the requested operation, and the estimated latency in milliseconds.
+
+\textbf{ACCEPT} (confirmed by caller): Contains the session ID and a ``ready'' flag, completing the handshake and enabling RPC calls.
+
+This three-way handshake is analogous to TCP's SYN/SYN-ACK/ACK but operates at the application layer, negotiating application-specific parameters (compression, budget, schema) rather than transport parameters (window size, MSS). The handshake ensures that both proxies agree on the communication contract before any data is exchanged, preventing wasted bandwidth on incompatible formats.
+
+\subsection{Serialization Engine with Compression}
+
+The serialization engine supports JSON as the primary serialization format, with optional compression using LZ4~\cite{lz42014}, Zstd~\cite{zstd2016}, or Gzip. The choice of JSON over Protobuf~\cite{protobuf2022} is deliberate: JSON provides human-readable debugging, wide language support, and schema-less flexibility for dynamic agent capabilities. The compression pipeline compensates for JSON's verbosity, achieving 93--95\% compression ratios on repetitive JSON data.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Algorithm & 100B & 1KB & 10KB & 100KB \\
+\midrule
+LZ4 compress & 387\textit{ns} & 814\textit{ns} & 2.03\textmu s & 11.84\textmu s \\
+Zstd compress & 20.70\textmu s & 25.60\textmu s & 31.77\textmu s & 64.38\textmu s \\
+Gzip compress & 16.26\textmu s & 31.29\textmu s & 177.85\textmu s & 2.92\textit{ms} \\
+\midrule
+LZ4 decompress & 104\textit{ns} & 141\textit{ns} & 267\textit{ns} & 5.24\textmu s \\
+Zstd decompress & 2.12\textmu s & 2.02\textmu s & 3.16\textmu s & 15.59\textmu s \\
+Gzip decompress & 3.74\textmu s & 3.28\textmu s & 4.78\textmu s & 18.61\textmu s \\
+\bottomrule
+\end{tabular}
+\caption{Compression and decompression latency by algorithm and data size (random data).}
+\label{tab:compression}
+\end{table}
+
+LZ4 is the fastest compressor at 387\textit{ns} for 100-byte payloads, making it ideal for low-latency RPC calls. Zstd offers the best compression ratio (95\% on repetitive JSON) at moderate speed cost. Gzip achieves comparable ratios but suffers from quadratic scaling on large payloads (2.92\textit{ms} for 100KB), making it unsuitable for real-time communication.
+
+The \texttt{serialize+zstd\_pipeline} benchmark measures the combined JSON serialization + Zstd compression round-trip at 27.31\textmu s, corresponding to approximately 37K ops/s---sufficient for the expected RPC call rate of 10K--100K ops/s.
+
+\subsection{Error Handling and Retry Strategy}
+
+The \texttt{ErrorHandler} module classifies errors into three categories:
+
+\begin{enumerate}
+  \item \textbf{Transient}: Network timeouts, temporary capacity limits, DHT lookup failures. These errors trigger exponential backoff retry with jitter: $\text{delay}_i = \min(2^i \cdot \text{base\_delay} + \text{rand}(0, J), \text{max\_delay})$, where base\_delay = 100\textit{ms}, jitter $J$ = 50\textit{ms}, and max\_delay = 30\textit{s}. Maximum retries = 5.
+
+  \item \textbf{Permanent}: Invalid DID, unsupported protocol version, budget exceeded. These errors are propagated to the caller immediately without retry, as the condition will not resolve with repeated attempts.
+
+  \item \textbf{Fatal}: Frame corruption, stream state violation, mTLS handshake failure. These errors terminate the connection and require re-establishment from scratch.
+\end{enumerate}
+
+The error classification follows the principle of ``retry what might succeed, propagate what won't.'' This design prevents retry storms on permanent errors (e.g., an invalid DID won't become valid after 5 retries) while ensuring resilience against transient network disruptions.

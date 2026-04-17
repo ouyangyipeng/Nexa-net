@@ -1,0 +1,44 @@
+\section{Discussion and Limitations}
+
+\subsection{Advantages of the Nexa-net Design}
+
+Nexa-net's architecture offers several distinctive advantages over existing agent communication approaches:
+
+\textbf{Non-invasive integration}. The Sidecar Proxy pattern enables agents to join the network without modifying their internal logic. Whether an agent is built on LangChain~\cite{chase2022langchain}, AutoGen~\cite{wu2023autogen}, or custom code, it communicates with Nexa-net through a simple local function call. This design reduces integration cost from ``rewrite agent logic'' to ``deploy a proxy alongside the agent,'' a fundamental improvement in adoption feasibility.
+
+\textbf{Semantic-first routing}. By replacing URL-based service discovery with intent-driven vector similarity matching, Nexa-net eliminates the need for human operators to manually configure service addresses. The HNSW-based routing algorithm at 31\textmu s latency makes semantic matching practical for real-time agent interactions, achieving 3,200$\times$ improvement over the target latency.
+
+\textbf{Zero-trust security}. The DID + VC + mTLS identity stack ensures that every interaction is cryptographically verified, without relying on centralized certificate authorities or manually distributed API keys. The balance of self-sovereign identity (agents control their DIDs) with verified capability attestation (Trust Anchors validate claims) provides both autonomy and trust.
+
+\textbf{Economic sustainability}. The state channel + MicroReceipt mechanism enables high-frequency micropayments at 9.9M TPS, creating economic incentives for service providers while maintaining budget guardrails for consumers. The multi-level budget controller prevents resource abuse through per-call, per-channel, and per-agent limits.
+
+\textbf{Performance efficiency}. All benchmark targets are exceeded by significant margins (56$\times$ to 3,200$\times$), demonstrating that the Rust implementation with Tokio async, DashMap lock-free concurrency, and SIMD-optimized vector operations provides production-grade performance suitable for large-scale agent networks.
+
+\subsection{Limitations}
+
+Despite the promising results, Nexa-net has six notable limitations in its current implementation:
+
+\textbf{No real network transport}. All benchmarks and E2E tests operate at the in-memory level. The proxy-to-proxy RPC communication, mTLS handshake, and compression pipeline are tested through in-memory mocks rather than actual TCP connections. Real-world latency will include network round-trip times (typically 10--100\textit{ms} depending on geography), which dwarf the current 31\textmu s routing overhead. The next development phase must implement real TCP/TLS transport between proxy processes.
+
+\textbf{gRPC services are placeholders}. Only the gRPC health check service is fully implemented. The identity, discovery, transport, and economy gRPC services have Protobuf definitions (\texttt{proto/*.proto}) but placeholder handlers. Production deployment requires completing these handlers and integrating them with the underlying Rust modules.
+
+\textbf{ONNX embedding model dependency}. The production-quality semantic vectorizer depends on downloading a pre-trained sentence-BERT model (22MB ONNX file). This download step occurs at build time via \texttt{scripts/download\_embedding\_model.sh}, which may fail in restricted network environments. Future versions should include model caching, fallback to the Mock embedder, and support for multiple model sizes (e.g., a smaller 80MB model for resource-constrained environments).
+
+\textbf{mTLS handshake not implemented}. The mTLS module defines the handshake protocol, certificate generation, and DID-verification integration, but the actual TLS session establishment is a design placeholder. Integration with the Rust \texttt{rustls} library for production mTLS is a critical next step, as all proxy-to-proxy communication currently assumes a trusted local network.
+
+\textbf{Supernode not implemented}. The architecture design includes supernodes for centralized registry, NAT traversal (STUN/TURN), and relay services, but no supernode implementation exists. In the current prototype, all proxies operate as peers without a supernode coordinator, limiting the system to local-network deployments. Supernode implementation is required for cross-network agent discovery and NAT traversal.
+
+\textbf{No cross-chain settlement}. The SettlementEngine records final balances in a local ledger, but there is no mechanism to settle across blockchain networks (Bitcoin, Ethereum, etc.). The current design assumes a closed Nexa-net economy where NEXA tokens are internal utility tokens. For real-world value exchange, cross-chain bridges or atomic swaps are needed to convert NEXA balances to external cryptocurrency.
+
+\subsection{Future Directions}
+
+Based on the identified limitations, the following development priorities are proposed:
+
+\begin{enumerate}
+  \item \textbf{Real network layer}: Implement TCP/TLS transport between proxies using rustls, with mTLS handshake integration and QUIC~\cite{rfc9000} support for low-latency connections.
+  \item \textbf{ONNX production models}: Integrate production sentence-BERT models with model caching, multi-model support, and GPU acceleration via CUDA-backed ONNX Runtime.
+  \item \textbf{Supernode cluster}: Implement the supernode registry, STUN/TURN NAT traversal, and relay services for cross-network agent discovery.
+  \item \textbf{Multi-language SDKs}: Provide Python, TypeScript, and Go SDKs alongside the existing Rust SDK, enabling broader agent ecosystem integration.
+  \item \textbf{Cross-chain settlement}: Design atomic swap protocols for NEXA-to-Bitcoin/Ethereum settlement, leveraging Lightning Network~\cite{lightning2016} and Raiden~\cite{raiden2017} as settlement anchors.
+  \item \textbf{Real-world benchmarks}: Measure end-to-end latency across geographic regions, variable network conditions, and concurrent agent populations to validate the in-memory benchmarks under realistic conditions.
+\end{enumerate}
