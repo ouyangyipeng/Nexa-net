@@ -8,6 +8,7 @@ use crate::types::{CallRequest, CallResponse};
 /// Proxy client
 pub struct ProxyClient {
     /// Proxy endpoint
+    #[allow(dead_code)]
     endpoint: String,
 }
 
@@ -21,7 +22,7 @@ impl ProxyClient {
 
     /// Make a network call
     pub async fn call(&self, _request: CallRequest) -> Result<CallResponse> {
-        // TODO: Implement actual call
+        // NOTE: Placeholder — actual implementation requires proxy server connection
         Ok(CallResponse {
             call_id: uuid::Uuid::new_v4().to_string(),
             status: crate::types::CallStatus::Success,

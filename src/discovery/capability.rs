@@ -205,6 +205,12 @@ pub struct CapabilityRegistry {
     stale_timeout: Duration,
 }
 
+impl Default for CapabilityRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CapabilityRegistry {
     /// Create a new registry
     pub fn new() -> Self {
@@ -214,11 +220,6 @@ impl CapabilityRegistry {
             max_capabilities: 1000,
             stale_timeout: Duration::from_secs(3600),
         }
-    }
-
-    /// Default implementation
-    fn default() -> Self {
-        Self::new()
     }
 
     /// Create a registry with custom settings
@@ -550,5 +551,178 @@ mod tests {
         let stats = registry.stats();
         assert_eq!(stats.total_capabilities, 2);
         assert_eq!(stats.unique_tags, 3);
+    }
+
+    // ========== Boundary/Error Tests ==========
+
+    #[test]
+    fn test_empty_registry_search() {
+        let registry = CapabilityRegistry::new();
+
+        assert!(registry.get("did:nexa:any").is_none());
+        assert!(registry
+            .find_by_tags(&["translation".to_string()])
+            .is_empty());
+        assert!(registry.find_available().is_empty());
+        assert!(registry.find_by_quality(0.0).is_empty());
+        assert!(registry.list_all().is_empty());
+
+        let stats = registry.stats();
+        assert_eq!(stats.total_capabilities, 0);
+        assert_eq!(stats.available_capabilities, 0);
+        assert_eq!(stats.unique_tags, 0);
+    }
+
+    #[test]
+    fn test_set_availability_nonexistent_did() {
+        let mut registry = CapabilityRegistry::new();
+        let result = registry.set_availability("did:nexa:nonexistent", false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_quality_nonexistent_did() {
+        let mut registry = CapabilityRegistry::new();
+        let result = registry.update_quality("did:nexa:nonexistent", QualityMetrics::default());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_vector_nonexistent_did() {
+        let mut registry = CapabilityRegistry::new();
+        let result = registry.set_vector("did:nexa:nonexistent", vec![1.0, 2.0]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_unregister_nonexistent() {
+        let mut registry = CapabilityRegistry::new();
+        // unregister returns silently for nonexistent
+        registry.unregister("did:nexa:nonexistent");
+        assert_eq!(registry.list_all().len(), 0);
+    }
+
+    #[test]
+    fn test_max_capabilities_eviction() {
+        let mut registry = CapabilityRegistry::with_settings(3, Duration::from_secs(3600));
+
+        for i in 0..5 {
+            registry
+                .register(create_test_schema(
+                    &format!("did:nexa:svc{}", i),
+                    &format!("Service {}", i),
+                    vec!["test"],
+                ))
+                .unwrap();
+        }
+
+        // Should have at most 3 capabilities (evicted oldest)
+        assert_eq!(registry.list_all().len(), 3);
+    }
+
+    #[test]
+    fn test_find_by_multiple_tags_union() {
+        let mut registry = CapabilityRegistry::new();
+
+        registry
+            .register(create_test_schema("did:nexa:svc1", "Svc1", vec!["a"]))
+            .unwrap();
+        registry
+            .register(create_test_schema("did:nexa:svc2", "Svc2", vec!["b"]))
+            .unwrap();
+        registry
+            .register(create_test_schema("did:nexa:svc3", "Svc3", vec!["a", "b"]))
+            .unwrap();
+
+        // Union search: searching for "a" OR "b" should return all three
+        let results = registry.find_by_tags(&["a".to_string(), "b".to_string()]);
+        assert_eq!(results.len(), 3);
+    }
+
+    #[test]
+    fn test_find_by_nonexistent_tag() {
+        let mut registry = CapabilityRegistry::new();
+        registry
+            .register(create_test_schema("did:nexa:svc1", "Svc1", vec!["a"]))
+            .unwrap();
+
+        let results = registry.find_by_tags(&["nonexistent".to_string()]);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_unregister_cleans_tag_index() {
+        let mut registry = CapabilityRegistry::new();
+
+        registry
+            .register(create_test_schema(
+                "did:nexa:svc1",
+                "Svc1",
+                vec!["unique_tag"],
+            ))
+            .unwrap();
+        assert_eq!(registry.stats().unique_tags, 1);
+
+        registry.unregister("did:nexa:svc1");
+        assert_eq!(registry.stats().unique_tags, 0);
+    }
+
+    // ========== Proptest Tests ==========
+
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Register→query→tag search consistency with arbitrary tags
+        #[test]
+        fn proptest_capability_registry_tag_consistency(
+            tags in prop::collection::vec("[a-z]{1,8}", 1..5),
+        ) {
+            let mut registry = CapabilityRegistry::new();
+
+            let schema = CapabilitySchema {
+                version: "1.0.0".to_string(),
+                metadata: ServiceMetadata {
+                    did: Did::new("did:nexa:test"),
+                    name: "Test Service".to_string(),
+                    description: "Test".to_string(),
+                    tags: tags.clone(),
+                },
+                endpoints: vec![],
+            };
+
+            registry.register(schema).unwrap();
+
+            // Every tag in the original set should find the capability
+            for tag in &tags {
+                let results = registry.find_by_tags(&[tag.clone()]);
+                assert!(results.len() >= 1, "tag '{}' should find at least 1 result", tag);
+            }
+        }
+
+        /// Multiple capabilities with overlapping tags — union search returns all
+        #[test]
+        fn proptest_registry_overlapping_tags(
+            tag_sets in prop::collection::vec(prop::collection::vec("[a-z]{1,4}", 1..3), 1..5),
+        ) {
+            let mut registry = CapabilityRegistry::new();
+
+            for (i, tags) in tag_sets.iter().enumerate() {
+                let schema = CapabilitySchema {
+                    version: "1.0.0".to_string(),
+                    metadata: ServiceMetadata {
+                        did: Did::new(format!("did:nexa:svc{}", i)),
+                        name: format!("Service {}", i),
+                        description: "Test".to_string(),
+                        tags: tags.clone(),
+                    },
+                    endpoints: vec![],
+                };
+                registry.register(schema).unwrap();
+            }
+
+            // Stats should reflect all capabilities
+            let stats = registry.stats();
+            assert_eq!(stats.total_capabilities, tag_sets.len());
+        }
     }
 }

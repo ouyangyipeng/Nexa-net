@@ -35,8 +35,8 @@ pub mod token;
 
 // Re-exports
 pub use budget::{BudgetController, BudgetLimit, BudgetStatus};
-pub use channel::{Channel, ChannelId, ChannelManager};
-pub use receipt::{MicroReceipt, ReceiptSigner, ReceiptVerifier};
+pub use channel::{Channel, ChannelConfig, ChannelId, ChannelManager};
+pub use receipt::{MicroReceipt, ReceiptChain, ReceiptVerifier};
 pub use settlement::{Dispute, Settlement, SettlementEngine};
 pub use token::{TokenAmount, TokenBalance, TokenEngine};
 

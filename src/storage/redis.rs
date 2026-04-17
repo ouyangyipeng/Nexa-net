@@ -33,6 +33,7 @@ impl Default for RedisConfig {
 ///
 /// This is a stub implementation. Full implementation will be added in Phase 1.
 pub struct RedisStore {
+    #[allow(dead_code)]
     config: RedisConfig,
     connected: bool,
 }
@@ -74,7 +75,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -92,7 +93,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -105,7 +106,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -118,7 +119,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -131,7 +132,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -144,7 +145,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -159,7 +160,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -172,7 +173,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -191,7 +192,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -204,7 +205,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -217,7 +218,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -237,7 +238,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -250,7 +251,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))
@@ -268,7 +269,7 @@ impl RedisStore {
                 "Not connected to Redis".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active Redis connection (feature-gated)
         Err(StorageError::Internal(
             "Redis storage not yet implemented".to_string(),
         ))

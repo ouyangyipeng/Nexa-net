@@ -94,7 +94,7 @@ impl DidResolver {
             }
         }
 
-        // TODO: Query DHT network for DID document
+        // NOTE: DHT network query not yet connected — requires network layer integration
         // For now, return an error indicating the document was not found
         Ok(DidResolutionResult {
             document: None,
@@ -157,7 +157,7 @@ impl DidResolver {
             return false;
         }
 
-        // TODO: Verify signatures and proof
+        // NOTE: Signature and proof verification pending — requires DID resolution for key extraction
         true
     }
 

@@ -1,8 +1,10 @@
 //! Key Rotation Management
 //!
 //! Automatic key rotation for enhanced security.
+//! All rotation events produce audit logs when an AuditLogger is configured.
 
 use crate::error::Result;
+use crate::security::AuditLogger;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -113,10 +115,11 @@ impl KeyMetadata {
     }
 }
 
-/// Key rotator
+/// Key rotator with audit logging
 pub struct KeyRotator {
     policy: KeyRotationPolicy,
     keys: Arc<RwLock<HashMap<String, KeyMetadata>>>,
+    audit_logger: Option<Arc<AuditLogger>>,
 }
 
 impl KeyRotator {
@@ -125,6 +128,7 @@ impl KeyRotator {
         Self {
             policy,
             keys: Arc::new(RwLock::new(HashMap::new())),
+            audit_logger: None,
         }
     }
 
@@ -133,11 +137,24 @@ impl KeyRotator {
         Self::new(KeyRotationPolicy::default())
     }
 
+    /// Set audit logger for security event tracking
+    pub fn with_audit_logger(mut self, logger: Arc<AuditLogger>) -> Self {
+        self.audit_logger = Some(logger);
+        self
+    }
+
     /// Register a key for rotation tracking
+    ///
+    /// An audit event (`KeyGenerated`) is logged if an audit logger is set.
     pub async fn register_key(&self, key_id: &str, key_type: &str) -> Result<()> {
         let mut keys = self.keys.write().await;
         let metadata = KeyMetadata::new(key_id, key_type, &self.policy);
         keys.insert(key_id.to_string(), metadata);
+
+        if let Some(logger) = &self.audit_logger {
+            logger.log_key_generated(key_id, key_type)?;
+        }
+
         Ok(())
     }
 
@@ -188,10 +205,18 @@ impl KeyRotator {
     }
 
     /// Mark a key as rotated
+    ///
+    /// An audit event (`KeyRotated`) is logged if an audit logger is set.
     pub async fn mark_rotated(&self, key_id: &str) -> Result<()> {
         let mut keys = self.keys.write().await;
         if let Some(metadata) = keys.get_mut(key_id) {
+            let old_version = metadata.version;
             metadata.mark_rotated(&self.policy);
+            let new_version = metadata.version;
+
+            if let Some(logger) = &self.audit_logger {
+                logger.log_key_rotated(key_id, old_version, new_version)?;
+            }
         }
         Ok(())
     }
@@ -292,5 +317,31 @@ mod tests {
         let stats = rotator.stats().await;
         assert_eq!(stats.total_keys, 2);
         assert_eq!(stats.active_keys, 2);
+    }
+
+    #[tokio::test]
+    async fn test_audit_logger_integration() {
+        use crate::security::audit::MemoryAuditSink;
+
+        let sink = Arc::new(MemoryAuditSink::new(100));
+        let logger = Arc::new(AuditLogger::new(sink.clone()));
+        let rotator = KeyRotator::default_rotator().with_audit_logger(logger);
+
+        // Register should log KeyGenerated
+        rotator.register_key("key-1", "signing").await.unwrap();
+        let gen_events = sink.get_events_by_type("key_generated").await;
+        assert_eq!(gen_events.len(), 1);
+
+        // Rotate should log KeyRotated
+        // First make key eligible for rotation
+        let mut keys = rotator.keys.write().await;
+        if let Some(metadata) = keys.get_mut("key-1") {
+            metadata.next_rotation = Utc::now() - chrono::Duration::seconds(1);
+        }
+        drop(keys);
+
+        rotator.mark_rotated("key-1").await.unwrap();
+        let rotate_events = sink.get_events_by_type("key_rotated").await;
+        assert_eq!(rotate_events.len(), 1);
     }
 }

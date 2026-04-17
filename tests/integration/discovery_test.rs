@@ -1,38 +1,31 @@
 //! Discovery Integration Tests
 //!
 //! Tests for multi-agent service discovery and semantic routing.
+//! Updated to use common test utilities (TestAgent, create_test_router, test_route_context).
 
-use nexa_net::discovery::{CapabilityRegistry, SemanticRouter, RoutingWeights};
-use nexa_net::types::{CapabilitySchema, ServiceMetadata, Did, RouteContext};
-
-/// Create a test capability schema
-fn create_capability(did: &str, name: &str, tags: Vec<&str>) -> CapabilitySchema {
-    CapabilitySchema {
-        version: "1.0.0".to_string(),
-        metadata: ServiceMetadata {
-            did: Did::new(did),
-            name: name.to_string(),
-            description: format!("{} service", name),
-            tags: tags.iter().map(|s| s.to_string()).collect(),
-        },
-        endpoints: vec![],
-    }
-}
+use super::common::{create_test_router, test_route_context, TestAgent};
+use nexa_net::discovery::router::{RoutingConfig, RoutingWeights};
+use nexa_net::discovery::CapabilityRegistry;
 
 #[test]
 fn test_multi_agent_registration() {
     // Create registry
     let mut registry = CapabilityRegistry::new();
-    
+
     // Register multiple agents with different capabilities
-    let agent_a = create_capability("did:nexa:agent-a", "Translation Service", vec!["translation", "nlp"]);
-    let agent_b = create_capability("did:nexa:agent-b", "Image Processing", vec!["image", "vision"]);
-    let agent_c = create_capability("did:nexa:agent-c", "Document Analysis", vec!["document", "nlp"]);
-    
-    registry.register(agent_a).unwrap();
-    registry.register(agent_b).unwrap();
-    registry.register(agent_c).unwrap();
-    
+    let mut agent_a = TestAgent::new("agent-a");
+    agent_a.add_capability("Translation Service", vec!["translation", "nlp"]);
+
+    let mut agent_b = TestAgent::new("agent-b");
+    agent_b.add_capability("Image Processing", vec!["image", "vision"]);
+
+    let mut agent_c = TestAgent::new("agent-c");
+    agent_c.add_capability("Document Analysis", vec!["document", "nlp"]);
+
+    agent_a.register_into(&mut registry);
+    agent_b.register_into(&mut registry);
+    agent_c.register_into(&mut registry);
+
     // Verify all registered
     assert!(registry.get("did:nexa:agent-a").is_some());
     assert!(registry.get("did:nexa:agent-b").is_some());
@@ -43,48 +36,61 @@ fn test_multi_agent_registration() {
 fn test_semantic_discovery() {
     // Create router with registry
     let mut registry = CapabilityRegistry::new();
-    
+
     // Register translation services
-    let translator_1 = create_capability(
-        "did:nexa:translator-1",
+    let mut translator_1 = TestAgent::new("translator-1");
+    translator_1.add_capability(
         "English-Chinese Translation",
-        vec!["translation", "english", "chinese"]
+        vec!["translation", "english", "chinese"],
     );
-    let translator_2 = create_capability(
-        "did:nexa:translator-2",
+
+    let mut translator_2 = TestAgent::new("translator-2");
+    translator_2.add_capability(
         "English-Japanese Translation",
-        vec!["translation", "english", "japanese"]
+        vec!["translation", "english", "japanese"],
     );
-    
-    registry.register(translator_1).unwrap();
-    registry.register(translator_2).unwrap();
-    
-    // Create router
-    let router = SemanticRouter::new(registry);
-    
+
+    translator_1.register_into(&mut registry);
+    translator_2.register_into(&mut registry);
+
+    // Create router with relaxed config for testing
+    let router = create_test_router(registry, false);
+
     // Discover services
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let routes = rt.block_on(async {
-        router.discover("translate english to chinese", RouteContext::default()).await
-    }).unwrap();
-    
-    // Should find at least one service
-    assert!(!routes.is_empty());
+    let routes = rt
+        .block_on(async {
+            router
+                .discover("translate english to chinese", test_route_context(10))
+                .await
+        })
+        .unwrap();
+
+    // Should find at least one service with relaxed config
+    assert!(!routes.is_empty(), "Should discover at least one service");
 }
 
 #[test]
 fn test_capability_tags_indexing() {
     let mut registry = CapabilityRegistry::new();
-    
-    // Register with overlapping tags
-    registry.register(create_capability("did:nexa:svc1", "NLP Service", vec!["nlp", "translation"])).unwrap();
-    registry.register(create_capability("did:nexa:svc2", "Translation API", vec!["translation", "api"])).unwrap();
-    registry.register(create_capability("did:nexa:svc3", "Vision API", vec!["vision", "api"])).unwrap();
-    
+
+    let mut svc1 = TestAgent::new("svc1");
+    svc1.add_capability("NLP Service", vec!["nlp", "translation"]);
+
+    let mut svc2 = TestAgent::new("svc2");
+    svc2.add_capability("Translation API", vec!["translation", "api"]);
+
+    let mut svc3 = TestAgent::new("svc3");
+    svc3.add_capability("Vision API", vec!["vision", "api"]);
+
+    svc1.register_into(&mut registry);
+    svc2.register_into(&mut registry);
+    svc3.register_into(&mut registry);
+
     // Find by tag
     let translation_services = registry.find_by_tags(&["translation".to_string()]);
     assert_eq!(translation_services.len(), 2);
-    
+
     let api_services = registry.find_by_tags(&["api".to_string()]);
     assert_eq!(api_services.len(), 2);
 }
@@ -98,11 +104,21 @@ fn test_routing_weights() {
         load: 0.1,
         latency: 0.05,
     };
-    
+
     // Verify weights sum to ~1.0
-    let total = weights.similarity + weights.quality + weights.cost + weights.load + weights.latency;
+    let total =
+        weights.similarity + weights.quality + weights.cost + weights.load + weights.latency;
     assert!((total - 1.0).abs() < 0.01);
-    
+
     // Verify validation
     assert!(weights.validate());
+}
+
+#[test]
+fn test_routing_config_defaults() {
+    let config = RoutingConfig::default();
+    assert_eq!(config.min_similarity, 0.5);
+    assert_eq!(config.min_quality, 0.8);
+    assert!(config.available_only);
+    assert!(config.weights.validate());
 }

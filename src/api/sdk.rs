@@ -103,7 +103,7 @@ impl NexaClient {
     }
 
     /// Make a full network call with complete request
-    pub async fn call_full(&self, request: CallRequest) -> Result<CallResponse> {
+    pub async fn call_full(&self, _request: CallRequest) -> Result<CallResponse> {
         // Placeholder implementation - in real code this would make HTTP request
         // to the proxy's REST API
         Ok(CallResponse {
@@ -129,7 +129,7 @@ impl NexaClient {
     }
 
     /// Discover services matching an intent
-    pub async fn discover(&self, intent: &str, max_results: usize) -> Result<Vec<Route>> {
+    pub async fn discover(&self, intent: &str, _max_results: usize) -> Result<Vec<Route>> {
         // Placeholder - would POST to /api/v1/discover
         tracing::debug!("Discovering for intent: {}", intent);
         Ok(vec![])
@@ -341,13 +341,13 @@ impl StreamCall {
 
     /// Send a data chunk (placeholder)
     pub async fn send(&self, _data: Vec<u8>) -> Result<()> {
-        // TODO: Implement streaming via WebSocket or gRPC
+        // NOTE: Future — requires WebSocket/gRPC streaming support
         Ok(())
     }
 
     /// Receive data chunk (placeholder)
     pub async fn recv(&mut self) -> Result<Option<Vec<u8>>> {
-        // TODO: Implement streaming via WebSocket or gRPC
+        // NOTE: Future — requires WebSocket/gRPC streaming support
         Ok(None)
     }
 

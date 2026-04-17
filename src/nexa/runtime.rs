@@ -20,7 +20,7 @@ impl AvmRuntime {
 
     /// Execute a Nexa script
     pub async fn execute(&self, _script: &str) -> Result<String> {
-        // TODO: Implement actual AVM execution
+        // NOTE: Placeholder — AVM execution not yet implemented
         Ok("".to_string())
     }
 }

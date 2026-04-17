@@ -5,26 +5,23 @@
 //!
 //! # Components
 //!
+//! - **HNSW Index**: Hierarchical Navigable Small World graph for O(log n) vector search
+//! - **Kademlia DHT**: Distributed hash table with k-bucket routing for node discovery
+//! - **Semantic DHT**: Combined HNSW + Kademlia for distributed semantic search
 //! - **Capability**: Service capability schema definition and registration
 //! - **Vectorizer**: Semantic vectorization using embedding models
-//! - **Semantic DHT**: Distributed hash table for semantic indexing
 //! - **Router**: Multi-factor semantic routing algorithm
 //! - **Node Status**: Node health and load monitoring
 //!
-//! # Example
+//! # Architecture
 //!
-//! ```rust,ignore
-//! use nexa_net::discovery::{CapabilityRegistry, SemanticRouter};
-//! use nexa_net::types::{CapabilitySchema, ServiceMetadata, Did, RouteContext};
+//! The Semantic DHT combines two key algorithms:
+//! 1. **HNSW** (local): Fast approximate nearest neighbor search for semantic matching
+//! 2. **Kademlia** (distributed): DHT routing for node discovery and vector replication
 //!
-//! // Register a capability
-//! let mut registry = CapabilityRegistry::new();
-//! // registry.register(capability_schema).unwrap();
-//!
-//! // Discover services by intent
-//! let router = SemanticRouter::new(registry);
-//! // let routes = router.discover("translate English PDF to Chinese", RouteContext::default()).await?;
-//! ```
+//! This enables sub-linear search complexity across the entire network:
+//! - Local search: O(log n) via HNSW graph traversal
+//! - Network search: O(log N) via Kademlia-style iterative lookup
 
 pub mod capability;
 pub mod embedding;
@@ -37,7 +34,7 @@ pub mod vectorizer;
 pub use capability::CapabilityRegistry;
 pub use node_status::{NodeStatus, NodeStatusManager};
 pub use router::SemanticRouter;
-pub use semantic_dht::SemanticDHT;
+pub use semantic_dht::{DhtNodeInfo, HnswConfig, HnswIndex, KademliaRoutingTable, SemanticDHT};
 pub use vectorizer::{SemanticVector, Vectorizer, VectorizerBuilder};
 
 // Embedding re-exports

@@ -64,7 +64,7 @@ impl DagExecutor {
 
     /// Execute the DAG
     pub async fn execute(&self, _input: &str) -> Result<String> {
-        // TODO: Implement actual DAG execution
+        // NOTE: Placeholder — DAG execution not yet implemented
         Ok("".to_string())
     }
 }

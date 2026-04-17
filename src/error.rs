@@ -143,10 +143,16 @@ pub enum Error {
 
     // External Errors
     #[error("gRPC error: {0}")]
-    Grpc(#[from] tonic::Status),
+    Grpc(Box<tonic::Status>),
 
     #[error("Serialization error: {0}")]
     JsonError(#[from] serde_json::Error),
+}
+
+impl From<tonic::Status> for Error {
+    fn from(err: tonic::Status) -> Self {
+        Error::Grpc(Box::new(err))
+    }
 }
 
 impl From<prost::DecodeError> for Error {

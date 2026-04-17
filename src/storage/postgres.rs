@@ -34,6 +34,7 @@ impl Default for PostgresConfig {
 ///
 /// This is a stub implementation. Full implementation will be added in Phase 1.
 pub struct PostgresStore {
+    #[allow(dead_code)]
     config: PostgresConfig,
     connected: bool,
 }
@@ -75,7 +76,7 @@ impl PostgresStore {
                 "Not connected to database".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active database connection (feature-gated)
         Err(StorageError::Internal(
             "PostgreSQL storage not yet implemented".to_string(),
         ))
@@ -88,7 +89,7 @@ impl PostgresStore {
                 "Not connected to database".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active database connection (feature-gated)
         Err(StorageError::Internal(
             "PostgreSQL storage not yet implemented".to_string(),
         ))
@@ -101,7 +102,7 @@ impl PostgresStore {
                 "Not connected to database".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active database connection (feature-gated)
         Err(StorageError::Internal(
             "PostgreSQL storage not yet implemented".to_string(),
         ))
@@ -116,7 +117,7 @@ impl PostgresStore {
                 "Not connected to database".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active database connection (feature-gated)
         Err(StorageError::Internal(
             "PostgreSQL storage not yet implemented".to_string(),
         ))
@@ -129,7 +130,7 @@ impl PostgresStore {
                 "Not connected to database".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active database connection (feature-gated)
         Err(StorageError::Internal(
             "PostgreSQL storage not yet implemented".to_string(),
         ))
@@ -144,7 +145,7 @@ impl PostgresStore {
                 "Not connected to database".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active database connection (feature-gated)
         Err(StorageError::Internal(
             "PostgreSQL storage not yet implemented".to_string(),
         ))
@@ -160,7 +161,7 @@ impl PostgresStore {
                 "Not connected to database".to_string(),
             ));
         }
-        // TODO: Implement in Phase 1
+        // NOTE: Stub implementation — requires active database connection (feature-gated)
         Err(StorageError::Internal(
             "PostgreSQL storage not yet implemented".to_string(),
         ))

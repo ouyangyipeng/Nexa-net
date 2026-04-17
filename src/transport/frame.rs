@@ -41,6 +41,7 @@ pub enum FrameType {
     Error = 7,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for FrameType {
     fn default() -> Self {
         FrameType::Data
@@ -168,7 +169,7 @@ impl FrameHeader {
     }
 
     /// Create a window update frame header
-    pub fn window_update(stream_id: u32, increment: u32) -> Self {
+    pub fn window_update(stream_id: u32, _increment: u32) -> Self {
         Self::new(4, FrameType::WindowUpdate, stream_id, FrameFlags::empty())
     }
 
@@ -291,7 +292,7 @@ impl Frame {
 
     /// Create an error frame
     pub fn error(stream_id: u32, error_code: u32, message: &str) -> Self {
-        let mut payload = Vec::new();
+        let mut payload = Vec::with_capacity(4 + message.len());
         payload.extend_from_slice(&error_code.to_be_bytes());
         payload.extend_from_slice(message.as_bytes());
         let header = FrameHeader::error(stream_id, payload.len() as u32);
@@ -299,8 +300,12 @@ impl Frame {
     }
 
     /// Encode frame to bytes
+    ///
+    /// Pre-allocates the full frame size (header + payload) to avoid
+    /// reallocation when extending the header buffer with payload data.
     pub fn encode(&self) -> Vec<u8> {
-        let mut buf = self.header.encode();
+        let mut buf = Vec::with_capacity(FrameHeader::SIZE + self.payload.len());
+        buf.extend_from_slice(&self.header.encode());
         buf.extend_from_slice(&self.payload);
         buf
     }
@@ -352,6 +357,7 @@ impl Frame {
 /// Frame reader for streaming frame parsing
 pub struct FrameReader<R: Read> {
     reader: R,
+    #[allow(dead_code)]
     buffer: Vec<u8>,
 }
 
@@ -478,5 +484,172 @@ mod tests {
             frame.payload[3],
         ]);
         assert_eq!(increment, 1024);
+    }
+
+    // ========== Boundary/Error Tests ==========
+
+    #[test]
+    fn test_frame_header_decode_too_short() {
+        let short_data = [0u8; 5]; // Less than 12 bytes
+        let result = FrameHeader::decode(&short_data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_frame_header_decode_invalid_frame_type() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&100u32.to_be_bytes()); // length
+        data.push(255u8); // Invalid frame type
+        data.extend_from_slice(&1u32.to_be_bytes()); // stream_id
+        data.push(0u8); // flags
+        data.extend_from_slice(&0u16.to_be_bytes()); // reserved
+
+        let result = FrameHeader::decode(&data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_frame_decode_truncated_payload() {
+        // Header says 100 bytes payload but we only provide 12 bytes (header only)
+        let mut data = Vec::new();
+        data.extend_from_slice(&100u32.to_be_bytes()); // length = 100
+        data.push(0u8); // Data frame type
+        data.extend_from_slice(&1u32.to_be_bytes()); // stream_id
+        data.push(0u8); // flags
+        data.extend_from_slice(&0u16.to_be_bytes()); // reserved
+
+        let result = Frame::decode(&data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_empty_payload_frame() {
+        let frame = Frame::data(1, Vec::new(), false);
+        assert_eq!(frame.payload.len(), 0);
+        assert_eq!(frame.total_size(), FrameHeader::SIZE);
+
+        let encoded = frame.encode();
+        let decoded = Frame::decode(&encoded).unwrap();
+        assert_eq!(decoded.payload.len(), 0);
+    }
+
+    #[test]
+    fn test_end_stream_frame() {
+        let frame = Frame::end_stream(42);
+        assert!(frame.is_end_of_stream());
+        assert_eq!(frame.payload.len(), 0);
+    }
+
+    #[test]
+    fn test_cancel_frame() {
+        let frame = Frame::cancel(42);
+        assert_eq!(frame.header.frame_type, FrameType::Cancel);
+        assert_eq!(frame.header.stream_id, 42);
+        assert_eq!(frame.payload.len(), 0);
+    }
+
+    #[test]
+    fn test_error_frame() {
+        let frame = Frame::error(42, 500, "internal error");
+        assert_eq!(frame.header.frame_type, FrameType::Error);
+        assert_eq!(frame.header.stream_id, 42);
+        assert!(!frame.payload.is_empty());
+    }
+
+    #[test]
+    fn test_frame_flags_all_set() {
+        let flags = FrameFlags::new(
+            FrameFlags::END_STREAM
+                | FrameFlags::END_FRAME
+                | FrameFlags::COMPRESSED
+                | FrameFlags::END_HEADERS
+                | FrameFlags::ACK,
+        );
+        assert!(flags.is_end_stream());
+        assert!(flags.is_compressed());
+        assert!(flags.is_end_headers());
+        assert!(flags.is_ack());
+    }
+
+    #[test]
+    fn test_frame_header_default() {
+        let header = FrameHeader::default();
+        assert_eq!(header.length, 0);
+        assert_eq!(header.frame_type, FrameType::Data);
+        assert_eq!(header.stream_id, 0);
+        assert_eq!(header.reserved, 0);
+    }
+
+    #[test]
+    fn test_headers_frame() {
+        let payload = b"headers data".to_vec();
+        let frame = Frame::headers(1, payload.clone());
+        assert!(frame.is_headers());
+        assert_eq!(frame.payload, payload);
+    }
+
+    #[test]
+    fn test_large_payload_frame() {
+        let payload: Vec<u8> = (0..65535).map(|i| (i % 256) as u8).collect();
+        let frame = Frame::data(1, payload.clone(), false);
+
+        let encoded = frame.encode();
+        let decoded = Frame::decode(&encoded).unwrap();
+        assert_eq!(decoded.payload, payload);
+    }
+
+    #[test]
+    fn test_frame_type_values() {
+        assert_eq!(FrameType::Data as u8, 0);
+        assert_eq!(FrameType::Headers as u8, 1);
+        assert_eq!(FrameType::Priority as u8, 2);
+        assert_eq!(FrameType::EndStream as u8, 3);
+        assert_eq!(FrameType::WindowUpdate as u8, 4);
+        assert_eq!(FrameType::Ping as u8, 5);
+        assert_eq!(FrameType::Cancel as u8, 6);
+        assert_eq!(FrameType::Error as u8, 7);
+    }
+
+    // ========== Proptest Tests ==========
+
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Frame encode→decode round-trip with arbitrary payload bytes
+        #[test]
+        fn proptest_frame_roundtrip(
+            payload in prop::collection::vec(any::<u8>(), 0..1000),
+            stream_id in 0u32..1000u32,
+            compressed in any::<bool>(),
+        ) {
+            let frame = Frame::data(stream_id as u32, payload.clone(), compressed);
+            let encoded = frame.encode();
+            let decoded = Frame::decode(&encoded).unwrap();
+
+            assert_eq!(decoded.payload, payload);
+            assert_eq!(decoded.header.stream_id, stream_id as u32);
+            if compressed {
+                assert!(decoded.is_compressed());
+            } else {
+                assert!(!decoded.is_compressed());
+            }
+        }
+
+        /// Frame header encode→decode preserves all fields
+        #[test]
+        fn proptest_frame_header_roundtrip(
+            length in any::<u32>(),
+            stream_id in any::<u32>(),
+            flags_byte in any::<u8>(),
+        ) {
+            let header = FrameHeader::new(length, FrameType::Data, stream_id, FrameFlags::new(flags_byte));
+            let encoded = header.encode();
+            let decoded = FrameHeader::decode(&encoded).unwrap();
+
+            assert_eq!(decoded.length, length);
+            assert_eq!(decoded.frame_type, FrameType::Data);
+            assert_eq!(decoded.stream_id, stream_id);
+            assert_eq!(decoded.flags.raw(), flags_byte);
+        }
     }
 }

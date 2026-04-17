@@ -30,15 +30,35 @@ impl SemanticVector {
     }
 
     /// Calculate cosine similarity with another vector
+    ///
+    /// Uses f32 accumulation in a single fused loop for SIMD auto-vectorization.
+    /// The compiler can vectorize this into 4-wide (SSE) or 8-wide (AVX2)
+    /// multiply-add operations since all three accumulations share the
+    /// same iteration pattern over f32 data.
     pub fn cosine_similarity(&self, other: &SemanticVector) -> f32 {
-        if self.dimensions != other.dimensions {
+        if self.dimensions != other.dimensions || self.dimensions == 0 {
             return 0.0;
         }
 
-        let dot: f32 = self.data.iter().zip(&other.data).map(|(a, b)| a * b).sum();
+        let len = self.dimensions;
+        let a = &self.data;
+        let b = &other.data;
 
-        let norm_a: f32 = self.data.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_b: f32 = other.data.iter().map(|x| x * x).sum::<f32>().sqrt();
+        // Single fused loop — SIMD-friendly stride-1 access pattern
+        let mut dot: f32 = 0.0;
+        let mut norm_a_sq: f32 = 0.0;
+        let mut norm_b_sq: f32 = 0.0;
+
+        for i in 0..len {
+            let ai = a[i];
+            let bi = b[i];
+            dot += ai * bi;
+            norm_a_sq += ai * ai;
+            norm_b_sq += bi * bi;
+        }
+
+        let norm_a = norm_a_sq.sqrt();
+        let norm_b = norm_b_sq.sqrt();
 
         if norm_a == 0.0 || norm_b == 0.0 {
             return 0.0;

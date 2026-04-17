@@ -59,21 +59,20 @@ pub struct ProxyState {
 
 impl ProxyState {
     /// Create a new proxy state
+    ///
+    /// Key design: registry and node_status are shared between ProxyState
+    /// and SemanticRouter via the same Arc<RwLock>. This ensures that
+    /// writes via /v1/register are immediately visible to /v1/discover.
     pub fn new() -> Self {
-        // Create registry and node_status first (they need to be shared without RwLock for router)
-        let registry_inner = Arc::new(CapabilityRegistry::new());
-        let node_status_inner = Arc::new(NodeStatusManager::new());
-
-        // Router uses Arc directly (no RwLock wrapper)
-        let router = Arc::new(RwLock::new(SemanticRouter::with_shared(
-            registry_inner.clone(),
-            node_status_inner.clone(),
-        )));
-
-        // Wrap registry and node_status in RwLock for external access
-        // Note: We create new RwLock wrappers since the router owns the Arc directly
+        // Create shared registry and node_status (Arc<RwLock> so router sees writes)
         let registry = Arc::new(RwLock::new(CapabilityRegistry::new()));
         let node_status = Arc::new(RwLock::new(NodeStatusManager::new()));
+
+        // Router shares the same Arc<RwLock> references — no separate copies
+        let router = Arc::new(RwLock::new(SemanticRouter::with_shared(
+            registry.clone(),
+            node_status.clone(),
+        )));
 
         Self {
             identity: None,
@@ -92,6 +91,23 @@ impl ProxyState {
         self.identity = Some(identity);
         self
     }
+
+    /// Get proxy statistics
+    pub async fn proxy_stats(&self) -> ProxyStats {
+        let registry = self.registry.read().await;
+        let registry_stats = registry.stats();
+
+        let channels = self.channels.read().await;
+        let channel_stats = channels.stats();
+
+        ProxyStats {
+            total_capabilities: registry_stats.total_capabilities,
+            available_capabilities: registry_stats.available_capabilities,
+            open_channels: channel_stats.open_channels,
+            total_value_locked: channel_stats.total_value_locked,
+            total_transactions: channel_stats.total_transactions,
+        }
+    }
 }
 
 impl Default for ProxyState {
@@ -109,6 +125,7 @@ pub struct ProxyServer {
     /// RPC server
     rpc_server: RpcServer,
     /// Shutdown signal
+    #[allow(dead_code)]
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
@@ -266,7 +283,7 @@ impl ProxyServer {
 }
 
 /// Proxy server statistics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProxyStats {
     /// Total registered capabilities
     pub total_capabilities: usize,
@@ -310,7 +327,7 @@ pub mod handlers {
         let result = format!("Called {} on {}", route.endpoint.name, route.provider_did);
 
         // Create receipt
-        let cost = route.estimated_cost;
+        let _cost = route.estimated_cost;
 
         Ok(CallResponse {
             call_id: uuid::Uuid::new_v4().to_string(),
@@ -338,9 +355,13 @@ pub mod handlers {
     pub async fn handle_discover(
         state: Arc<ProxyState>,
         intent: &str,
+        max_candidates: usize,
     ) -> Result<Vec<crate::types::Route>> {
         let router = state.router.read().await;
-        let context = crate::types::RouteContext::default();
+        let context = crate::types::RouteContext {
+            max_candidates,
+            ..Default::default()
+        };
         router.discover(intent, context).await
     }
 

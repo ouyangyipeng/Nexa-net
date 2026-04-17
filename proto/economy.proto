@@ -1,0 +1,231 @@
+// Nexa-net Economy Protocol
+// Layer 4: State Channels, Micro-Receipts, Budget Control, and Settlement
+
+syntax = "proto3";
+
+package nexa.protocol.economy;
+
+import "nexa_common.proto";
+import "google/protobuf/timestamp.proto";
+
+// ============================================================================
+// Token Engine
+// ============================================================================
+
+message TokenBalance {
+  uint64 available = 1;
+  uint64 locked = 2;
+  uint64 pending = 3;
+}
+
+message MintRequest {
+  string did = 1;
+  uint64 amount = 2;
+  string reason = 3;
+  bytes authority_signature = 4;
+}
+
+message MintResponse {
+  bool success = 1;
+  TokenBalance new_balance = 2;
+  string error = 3;
+}
+
+message TransferRequest {
+  string from_did = 1;
+  string to_did = 2;
+  uint64 amount = 3;
+  bytes from_signature = 4;
+}
+
+message TransferResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ============================================================================
+// State Channel Protocol
+// ============================================================================
+
+message ChannelOpenRequest {
+  string initiator_did = 1;
+  string counterparty_did = 2;
+  uint64 initiator_deposit = 3;
+  uint64 counterparty_deposit = 4;
+  uint32 challenge_period_seconds = 5;
+  bytes initiator_signature = 6;
+}
+
+message ChannelOpenResponse {
+  string channel_id = 1;
+  bool success = 2;
+  nexa.protocol.ChannelStateProto state = 3;
+  bytes counterparty_signature = 4;
+  string error = 5;
+}
+
+message ChannelUpdateRequest {
+  string channel_id = 1;
+  uint64 sequence = 2;
+  uint64 balance_a = 3;
+  uint64 balance_b = 4;
+  bytes signature_a = 5;
+  bytes signature_b = 6;
+}
+
+message ChannelUpdateResponse {
+  bool success = 1;
+  uint64 new_sequence = 2;
+  string error = 3;
+}
+
+message ChannelCloseRequest {
+  string channel_id = 1;
+  string initiator_did = 2;
+  ChannelCloseReason reason = 3;
+  bytes initiator_signature = 4;
+  // Final state for dispute resolution
+  uint64 final_balance_a = 5;
+  uint64 final_balance_b = 6;
+  uint64 final_sequence = 7;
+  bytes final_signature_a = 8;
+  bytes final_signature_b = 9;
+}
+
+enum ChannelCloseReason {
+  CHANNEL_CLOSE_REASON_UNSPECIFIED = 0;
+  CHANNEL_CLOSE_REASON_MUTUAL = 1;
+  CHANNEL_CLOSE_REASON_UNILATERAL = 2;
+  CHANNEL_CLOSE_REASON_DISPUTE = 3;
+  CHANNEL_CLOSE_REASON_TIMEOUT = 4;
+}
+
+message ChannelCloseResponse {
+  bool success = 1;
+  nexa.protocol.ChannelStateProto new_state = 2;
+  google.protobuf.Timestamp settlement_deadline = 3;
+  string error = 4;
+}
+
+// ============================================================================
+// Micro-Receipt Protocol
+// ============================================================================
+
+message MicroReceiptProto {
+  string receipt_id = 1;
+  string channel_id = 2;
+  string caller_did = 3;
+  string provider_did = 4;
+  string call_id = 5;
+  uint64 amount = 6;
+  string service_endpoint = 7;
+  google.protobuf.Timestamp created_at = 8;
+  bytes caller_signature = 9;
+  bytes provider_signature = 10;
+  bytes previous_receipt_hash = 11;  // Hash chain link
+}
+
+message ReceiptCreateRequest {
+  string channel_id = 1;
+  string caller_did = 2;
+  string provider_did = 3;
+  string call_id = 4;
+  uint64 amount = 5;
+  string service_endpoint = 6;
+  bytes caller_signature = 7;
+}
+
+message ReceiptCreateResponse {
+  MicroReceiptProto receipt = 1;
+  string error = 2;
+}
+
+message ReceiptSignRequest {
+  string receipt_id = 1;
+  bytes provider_signature = 2;
+}
+
+message ReceiptSignResponse {
+  bool success = 1;
+  MicroReceiptProto signed_receipt = 2;
+  string error = 3;
+}
+
+message ReceiptVerifyRequest {
+  MicroReceiptProto receipt = 1;
+}
+
+message ReceiptVerifyResponse {
+  bool valid = 1;
+  repeated string errors = 2;
+}
+
+// ============================================================================
+// Budget Control
+// ============================================================================
+
+message BudgetSetRequest {
+  string did = 1;
+  BudgetLimits limits = 2;
+}
+
+message BudgetLimits {
+  uint64 per_call_limit = 1;
+  uint64 per_minute_limit = 2;
+  uint64 per_day_limit = 3;
+  uint64 total_limit = 4;
+}
+
+message BudgetSetResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message BudgetCheckRequest {
+  string did = 1;
+  uint64 estimated_cost = 2;
+}
+
+message BudgetCheckResponse {
+  bool within_budget = 1;
+  uint64 remaining_budget = 2;
+  uint64 current_spent = 3;
+}
+
+// ============================================================================
+// Settlement Protocol
+// ============================================================================
+
+message SettlementRequest {
+  string channel_id = 1;
+  uint64 final_balance_a = 2;
+  uint64 final_balance_b = 3;
+  uint64 final_sequence = 4;
+  bytes signature_a = 5;
+  bytes signature_b = 6;
+  repeated MicroReceiptProto receipts = 7;  // Evidence for dispute
+}
+
+message SettlementResponse {
+  bool success = 1;
+  string settlement_id = 2;
+  TokenBalance balance_a = 3;
+  TokenBalance balance_b = 4;
+  string error = 5;
+}
+
+message SettlementDisputeRequest {
+  string channel_id = 1;
+  string dispute_initiator_did = 2;
+  string reason = 3;
+  uint64 proposed_balance_a = 4;
+  uint64 proposed_balance_b = 5;
+  bytes evidence = 6;  // Signed state + receipts
+  bytes initiator_signature = 7;
+}
+
+message SettlementDisputeResponse {
+  bool accepted = 1;
+  google.protobuf.Timestamp challenge_end = 2;
+  string error = 3;
+}

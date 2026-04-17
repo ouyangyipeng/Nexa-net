@@ -1,0 +1,176 @@
+// Nexa-net Identity Protocol
+// Layer 1: DID, Authentication, and Verifiable Credentials
+
+syntax = "proto3";
+
+package nexa.protocol.identity;
+
+import "nexa_common.proto";
+import "google/protobuf/timestamp.proto";
+
+// ============================================================================
+// DID Protocol
+// ============================================================================
+
+message DidGenerateRequest {
+  string key_algorithm = 1;  // Ed25519, Secp256k1
+  bool generate_encryption_key = 2;
+  map<string, string> metadata = 3;
+}
+
+message DidGenerateResponse {
+  string did = 1;
+  DidDocument document = 2;
+  bytes encrypted_private_key = 3;
+  bytes public_key = 4;
+  bytes encryption_public_key = 5;
+}
+
+message DidDocument {
+  repeated string context = 1;
+  string id = 2;
+  string controller = 3;
+  repeated VerificationMethod verification_method = 4;
+  repeated string authentication = 5;
+  repeated VerificationMethod key_agreement = 6;
+  repeated Service service = 7;
+  google.protobuf.Timestamp created = 8;
+  google.protobuf.Timestamp updated = 9;
+}
+
+message VerificationMethod {
+  string id = 1;
+  string type = 2;
+  string controller = 3;
+  bytes public_key_multibase = 4;
+}
+
+message Service {
+  string id = 1;
+  string type = 2;
+  string service_endpoint = 3;
+}
+
+// ============================================================================
+// DID Resolve
+// ============================================================================
+
+message DidResolveRequest {
+  string did = 1;
+  ResolveOptions options = 2;
+}
+
+message ResolveOptions {
+  bool include_metadata = 1;
+  bool verify_signature = 2;
+  nexa.protocol.CacheControl cache_control = 3;
+}
+
+message DidResolveResponse {
+  DidDocument document = 1;
+  DidResolutionMetadata metadata = 2;
+}
+
+message DidResolutionMetadata {
+  string content_type = 1;
+  bool cached = 2;
+  google.protobuf.Timestamp cache_expires = 3;
+  google.protobuf.Timestamp resolved_at = 4;
+}
+
+// ============================================================================
+// Authentication Protocol
+// ============================================================================
+
+message AuthChallenge {
+  string challenge_id = 1;
+  bytes challenge_data = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  repeated string supported_algorithms = 4;
+}
+
+message AuthResponse {
+  string challenge_id = 1;
+  string responder_did = 2;
+  bytes signature = 3;
+  string algorithm = 4;
+  bytes responder_public_key = 5;
+}
+
+message AuthVerifyRequest {
+  string challenge_id = 1;
+  AuthResponse response = 2;
+}
+
+message AuthVerifyResponse {
+  bool valid = 1;
+  string responder_did = 2;
+  string error = 3;
+}
+
+// ============================================================================
+// Verifiable Credentials Protocol
+// ============================================================================
+
+message VcIssueRequest {
+  string issuer_did = 1;
+  string subject_did = 2;
+  string credential_type = 3;
+  map<string, string> claims = 4;
+  google.protobuf.Timestamp expiration_date = 5;
+}
+
+message VcIssueResponse {
+  VerifiableCredential credential = 1;
+}
+
+message VcVerifyRequest {
+  VerifiableCredential credential = 1;
+}
+
+message VcVerifyResponse {
+  bool valid = 1;
+  repeated string errors = 2;
+}
+
+message VcPresentRequest {
+  VerifiableCredential credential = 1;
+  string audience_did = 2;
+}
+
+message VcPresentResponse {
+  VerifiablePresentation presentation = 1;
+}
+
+message VerifiableCredential {
+  repeated string context = 1;
+  string id = 2;
+  repeated string type = 3;
+  string issuer = 4;
+  CredentialSubject credential_subject = 5;
+  google.protobuf.Timestamp issuance_date = 6;
+  google.protobuf.Timestamp expiration_date = 7;
+  Proof proof = 8;
+}
+
+message CredentialSubject {
+  string id = 1;
+  map<string, string> claims = 2;
+}
+
+message Proof {
+  string type = 1;
+  google.protobuf.Timestamp created = 2;
+  string verification_method = 3;
+  string proof_purpose = 4;
+  bytes proof_value = 5;
+}
+
+message VerifiablePresentation {
+  repeated string context = 1;
+  string id = 2;
+  repeated string type = 3;
+  string holder = 4;
+  repeated VerifiableCredential verifiable_credentials = 5;
+  Proof proof = 6;
+}

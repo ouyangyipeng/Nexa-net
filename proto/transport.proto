@@ -1,0 +1,183 @@
+// Nexa-net Transport Protocol
+// Layer 3: Protocol Negotiation, RPC, and Streaming
+
+syntax = "proto3";
+
+package nexa.protocol.transport;
+
+import "nexa_common.proto";
+import "google/protobuf/timestamp.proto";
+
+// ============================================================================
+// Protocol Negotiation (Handshake)
+// ============================================================================
+
+message SynNexa {
+  string intent_hash = 1;
+  uint64 max_budget = 2;
+  repeated string supported_protocols = 3;
+  repeated string supported_encodings = 4;
+  repeated nexa.protocol.CompressionType supported_compressions = 5;
+  ClientCapabilities capabilities = 6;
+  uint64 timestamp = 7;
+  bytes signature = 8;
+}
+
+message ClientCapabilities {
+  uint32 max_concurrent_streams = 1;
+  uint64 max_message_size = 2;
+  bool streaming = 3;
+  bool bidirectional = 4;
+}
+
+message AckSchema {
+  string selected_protocol = 1;
+  nexa.protocol.EncodingType selected_encoding = 2;
+  nexa.protocol.CompressionType selected_compression = 3;
+  string schema_hash = 4;
+  bytes compressed_schema = 5;
+  uint64 estimated_cost = 6;
+  uint32 estimated_latency_ms = 7;
+  ServerCapabilities capabilities = 8;
+  uint64 timestamp = 9;
+  bytes signature = 10;
+}
+
+message ServerCapabilities {
+  uint32 max_concurrent_streams = 1;
+  uint64 max_message_size = 2;
+  float current_load = 3;
+  uint32 available_queue_slots = 4;
+}
+
+message AcceptRequest {
+  string session_id = 1;
+  bool ready = 2;
+  bytes signature = 3;
+}
+
+message AcceptResponse {
+  string session_id = 1;
+  bool confirmed = 2;
+  string error = 3;
+}
+
+message Reject {
+  nexa.protocol.ErrorDetail reason = 1;
+  uint64 timestamp = 2;
+}
+
+// ============================================================================
+// RPC Protocol
+// ============================================================================
+
+message RpcRequestHeader {
+  string method = 1;
+  uint64 call_id = 2;
+  string caller_did = 3;
+  string endpoint_id = 4;
+  uint64 budget = 5;
+  uint32 timeout_ms = 6;
+  map<string, string> metadata = 7;
+  uint64 timestamp = 8;
+  bytes signature = 9;
+}
+
+message RpcResponseHeader {
+  uint64 call_id = 1;
+  nexa.protocol.RpcStatus status = 2;
+  uint64 actual_cost = 3;
+  uint32 processing_time_ms = 4;
+  nexa.protocol.ErrorDetail error_detail = 5;
+  uint64 timestamp = 6;
+  bytes signature = 7;
+}
+
+message RpcRequestBody {
+  bytes payload = 1;
+  nexa.protocol.EncodingType encoding = 2;
+  nexa.protocol.CompressionType compression = 3;
+}
+
+message RpcResponseBody {
+  bytes payload = 1;
+  nexa.protocol.EncodingType encoding = 2;
+  nexa.protocol.CompressionType compression = 3;
+}
+
+// ============================================================================
+// Streaming RPC
+// ============================================================================
+
+message StreamHeader {
+  uint64 call_id = 1;
+  string method = 2;
+  RpcStreamType stream_type = 3;
+  uint64 budget = 4;
+  uint32 timeout_ms = 5;
+  map<string, string> metadata = 6;
+  bytes signature = 7;
+}
+
+enum RpcStreamType {
+  RPC_STREAM_TYPE_UNSPECIFIED = 0;
+  RPC_STREAM_TYPE_UNARY = 1;
+  RPC_STREAM_TYPE_SERVER_STREAMING = 2;
+  RPC_STREAM_TYPE_CLIENT_STREAMING = 3;
+  RPC_STREAM_TYPE_BIDIRECTIONAL = 4;
+}
+
+message StreamData {
+  uint64 call_id = 1;
+  uint32 sequence = 2;
+  bytes payload = 3;
+  nexa.protocol.EncodingType encoding = 4;
+  nexa.protocol.CompressionType compression = 5;
+  bool end_of_stream = 6;
+}
+
+message StreamCancel {
+  uint64 call_id = 1;
+  string reason = 2;
+  bytes signature = 3;
+}
+
+// ============================================================================
+// Frame Protocol
+// ============================================================================
+
+// Frame types for wire-level multiplexing
+enum FrameType {
+  FRAME_TYPE_DATA = 0;
+  FRAME_TYPE_HEADERS = 1;
+  FRAME_TYPE_PRIORITY = 2;
+  FRAME_TYPE_END_STREAM = 3;
+  FRAME_TYPE_WINDOW_UPDATE = 4;
+  FRAME_TYPE_PING = 5;
+  FRAME_TYPE_CANCEL = 6;
+  FRAME_TYPE_ERROR = 7;
+}
+
+message FrameHeaderProto {
+  uint32 length = 1;
+  FrameType frame_type = 2;
+  uint32 stream_id = 3;
+  uint32 flags = 4;
+  uint32 reserved = 5;
+}
+
+message WindowUpdate {
+  uint32 stream_id = 1;
+  uint32 increment = 2;
+}
+
+message PingFrame {
+  bytes opaque_data = 1;
+  bool ack = 2;
+}
+
+message ErrorFrame {
+  uint32 stream_id = 1;
+  uint32 error_code = 2;
+  string error_message = 3;
+}

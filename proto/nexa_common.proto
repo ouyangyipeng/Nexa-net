@@ -1,0 +1,184 @@
+// Nexa-net Common Types
+// Shared types used across all protocol layers.
+
+syntax = "proto3";
+
+package nexa.protocol;
+
+import "google/protobuf/timestamp.proto";
+
+// ============================================================================
+// Compression Types
+// ============================================================================
+
+enum CompressionType {
+  COMPRESSION_TYPE_UNSPECIFIED = 0;
+  COMPRESSION_TYPE_NONE = 1;
+  COMPRESSION_TYPE_GZIP = 2;
+  COMPRESSION_TYPE_LZ4 = 3;
+  COMPRESSION_TYPE_ZSTD = 4;
+}
+
+// ============================================================================
+// Encoding Types
+// ============================================================================
+
+enum EncodingType {
+  ENCODING_TYPE_UNSPECIFIED = 0;
+  ENCODING_TYPE_PROTOBUF = 1;
+  ENCODING_TYPE_FLATBUFFERS = 2;
+  ENCODING_TYPE_JSON = 3;
+  ENCODING_TYPE_BINARY = 4;
+}
+
+// ============================================================================
+// Message Types
+// ============================================================================
+
+enum MessageType {
+  MESSAGE_TYPE_UNSPECIFIED = 0;
+
+  // Layer 1: Identity
+  MESSAGE_TYPE_DID_GENERATE = 100;
+  MESSAGE_TYPE_DID_RESOLVE = 101;
+  MESSAGE_TYPE_DID_RESOLVE_RESPONSE = 102;
+  MESSAGE_TYPE_DID_UPDATE = 103;
+  MESSAGE_TYPE_DID_DEACTIVATE = 104;
+  MESSAGE_TYPE_AUTH_CHALLENGE = 110;
+  MESSAGE_TYPE_AUTH_RESPONSE = 111;
+  MESSAGE_TYPE_AUTH_VERIFY = 112;
+  MESSAGE_TYPE_VC_ISSUE = 120;
+  MESSAGE_TYPE_VC_VERIFY = 121;
+  MESSAGE_TYPE_VC_PRESENT = 122;
+
+  // Layer 2: Discovery
+  MESSAGE_TYPE_REGISTER = 200;
+  MESSAGE_TYPE_REGISTER_RESPONSE = 201;
+  MESSAGE_TYPE_UNREGISTER = 202;
+  MESSAGE_TYPE_HEARTBEAT = 203;
+  MESSAGE_TYPE_ROUTE_QUERY = 210;
+  MESSAGE_TYPE_ROUTE_RESPONSE = 211;
+  MESSAGE_TYPE_CAPABILITY_QUERY = 212;
+  MESSAGE_TYPE_CAPABILITY_RESPONSE = 213;
+
+  // Layer 3: Transport
+  MESSAGE_TYPE_SYN_NEXA = 300;
+  MESSAGE_TYPE_ACK_SCHEMA = 301;
+  MESSAGE_TYPE_ACCEPT = 302;
+  MESSAGE_TYPE_REJECT = 303;
+  MESSAGE_TYPE_RPC_REQUEST = 310;
+  MESSAGE_TYPE_RPC_RESPONSE = 311;
+  MESSAGE_TYPE_RPC_STREAM = 312;
+  MESSAGE_TYPE_RPC_CANCEL = 313;
+
+  // Layer 4: Economy
+  MESSAGE_TYPE_CHANNEL_OPEN = 400;
+  MESSAGE_TYPE_CHANNEL_OPEN_RESPONSE = 401;
+  MESSAGE_TYPE_CHANNEL_CLOSE = 402;
+  MESSAGE_TYPE_CHANNEL_CLOSE_RESPONSE = 403;
+  MESSAGE_TYPE_RECEIPT_CREATE = 410;
+  MESSAGE_TYPE_RECEIPT_SIGN = 411;
+  MESSAGE_TYPE_RECEIPT_VERIFY = 412;
+  MESSAGE_TYPE_SETTLEMENT_REQUEST = 420;
+  MESSAGE_TYPE_SETTLEMENT_RESPONSE = 421;
+  MESSAGE_TYPE_SETTLEMENT_DISPUTE = 422;
+}
+
+// ============================================================================
+// RPC Status
+// ============================================================================
+
+enum RpcStatus {
+  RPC_STATUS_UNSPECIFIED = 0;
+  RPC_STATUS_SUCCESS = 1;
+  RPC_STATUS_ERROR = 2;
+  RPC_STATUS_TIMEOUT = 3;
+  RPC_STATUS_CANCELLED = 4;
+  RPC_STATUS_INSUFFICIENT_BUDGET = 5;
+  RPC_STATUS_RATE_LIMITED = 6;
+  RPC_STATUS_INTERNAL_ERROR = 7;
+}
+
+// ============================================================================
+// Error Types
+// ============================================================================
+
+enum ErrorType {
+  ERROR_TYPE_UNSPECIFIED = 0;
+  ERROR_TYPE_TRANSIENT = 1;
+  ERROR_TYPE_PERMANENT = 2;
+  ERROR_TYPE_CLIENT = 3;
+  ERROR_TYPE_SERVER = 4;
+}
+
+// ============================================================================
+// Cache Control
+// ============================================================================
+
+enum CacheControl {
+  CACHE_CONTROL_UNSPECIFIED = 0;
+  CACHE_CONTROL_CACHE_FIRST = 1;
+  CACHE_CONTROL_NETWORK_FIRST = 2;
+  CACHE_CONTROL_CACHE_ONLY = 3;
+  CACHE_CONTROL_NETWORK_ONLY = 4;
+}
+
+// ============================================================================
+// Channel State
+// ============================================================================
+
+enum ChannelStateProto {
+  CHANNEL_STATE_UNSPECIFIED = 0;
+  CHANNEL_STATE_OPEN = 1;
+  CHANNEL_STATE_CLOSING = 2;
+  CHANNEL_STATE_CLOSED = 3;
+  CHANNEL_STATE_DISPUTED = 4;
+}
+
+// ============================================================================
+// Message Envelope
+// ============================================================================
+
+message NexaMessage {
+  MessageHeader header = 1;
+  bytes body = 2;
+  MessageSignature signature = 3;
+}
+
+message MessageHeader {
+  string protocol_version = 1;
+  string message_type = 2;
+  string message_id = 3;
+  string correlation_id = 4;
+  string sender_did = 5;
+  string receiver_did = 6;
+  google.protobuf.Timestamp timestamp = 7;
+  uint32 ttl = 8;
+  map<string, string> metadata = 9;
+}
+
+message MessageSignature {
+  string algorithm = 1;
+  bytes signature = 2;
+  google.protobuf.Timestamp signed_at = 3;
+  string verification_key_ref = 4;
+}
+
+// ============================================================================
+// Retry Policy
+// ============================================================================
+
+message RetryPolicy {
+  bool retryable = 1;
+  uint32 max_retries = 2;
+  uint32 initial_delay_ms = 3;
+  uint32 max_delay_ms = 4;
+  float delay_multiplier = 5;
+}
+
+message ErrorDetail {
+  string error_code = 1;
+  ErrorType error_type = 2;
+  RetryPolicy retry_policy = 3;
+  string error_message = 4;
+}

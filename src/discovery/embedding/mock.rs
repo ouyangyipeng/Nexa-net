@@ -37,6 +37,7 @@ impl Embedder for MockEmbedder {
         // Use multiple hash passes to fill the vector
         let base_hash = self.hash_text(text);
 
+        #[allow(clippy::needless_range_loop)]
         for i in 0..self.dimensions {
             // Combine base hash with position for variation
             let mut hasher = DefaultHasher::new();

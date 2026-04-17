@@ -10,6 +10,7 @@ use nexa_net::{
     discovery::embedding::{create_embedder, EmbeddingConfig},
     discovery::semantic_dht::SemanticDHT,
     discovery::vectorizer::VectorizerBuilder,
+    identity::Did,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -87,7 +88,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // =========================================================================
     println!("\n4. Semantic DHT (Distributed Hash Table)...");
 
-    let mut dht = SemanticDHT::new();
+    let local_did = Did::parse("did:nexa:local-agent")?;
+    let dht = SemanticDHT::new(&local_did);
 
     // Store capabilities with their embeddings
     let capabilities = vec![
@@ -111,7 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (did, description) in &capabilities {
         let vector = vectorizer.vectorize(description)?;
-        let _ = dht.store(did.to_string(), vector);
+        let _ = dht.store(did.to_string(), vector.data);
     }
 
     println!("   Stored {} capabilities in DHT", capabilities.len());
@@ -120,7 +122,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let query = "I need to convert audio to text";
     let query_vector = vectorizer.vectorize(query)?;
 
-    let similar = dht.find_similar(&query_vector, 0.0); // threshold = 0.0 for mock
+    let similar = dht.find_similar(&query_vector.data, 5, 0.0); // top 5, threshold = 0.0
 
     println!("   Query: \"{}\"", query);
     println!("   Found {} similar capabilities:", similar.len());

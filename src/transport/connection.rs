@@ -11,6 +11,7 @@ pub struct ConnectionPool {
     /// Active connections
     connections: HashMap<String, Connection>,
     /// Maximum connections
+    #[allow(dead_code)]
     max_connections: usize,
 }
 

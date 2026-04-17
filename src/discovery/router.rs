@@ -15,6 +15,7 @@ use crate::discovery::{CapabilityRegistry, NodeStatusManager, Vectorizer};
 use crate::error::{Error, Result};
 use crate::types::{Route, RouteContext};
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Routing weights for multi-factor scoring
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -133,31 +134,34 @@ impl RoutingCandidate {
 
 /// Semantic router for service discovery
 pub struct SemanticRouter {
-    /// Capability registry
-    registry: Arc<CapabilityRegistry>,
+    /// Capability registry (shared with ProxyState via Arc<RwLock> for concurrent read/write)
+    registry: Arc<RwLock<CapabilityRegistry>>,
     /// Vectorizer
     vectorizer: Vectorizer,
-    /// Node status manager
-    node_status: Arc<NodeStatusManager>,
+    /// Node status manager (shared with ProxyState via Arc<RwLock>)
+    node_status: Arc<RwLock<NodeStatusManager>>,
     /// Routing configuration
     config: RoutingConfig,
 }
 
 impl SemanticRouter {
-    /// Create a new router
+    /// Create a new router (wraps registry in Arc<RwLock> for standalone use)
     pub fn new(registry: CapabilityRegistry) -> Self {
         Self {
-            registry: Arc::new(registry),
+            registry: Arc::new(RwLock::new(registry)),
             vectorizer: Vectorizer::new(),
-            node_status: Arc::new(NodeStatusManager::new()),
+            node_status: Arc::new(RwLock::new(NodeStatusManager::new())),
             config: RoutingConfig::default(),
         }
     }
 
-    /// Create a router with shared references
+    /// Create a router with shared references (for ProxyState integration)
+    ///
+    /// Both registry and node_status are shared Arc<RwLock> instances,
+    /// so writes via ProxyState are visible to this router's discover calls.
     pub fn with_shared(
-        registry: Arc<CapabilityRegistry>,
-        node_status: Arc<NodeStatusManager>,
+        registry: Arc<RwLock<CapabilityRegistry>>,
+        node_status: Arc<RwLock<NodeStatusManager>>,
     ) -> Self {
         Self {
             registry,
@@ -187,12 +191,19 @@ impl SemanticRouter {
     pub async fn discover(&self, intent: &str, context: RouteContext) -> Result<Vec<Route>> {
         let intent_vec = self.vectorizer.vectorize(intent)?;
 
-        // Get all capabilities
-        let capabilities = self.registry.list_all_registered();
+        // Read registry under lock, clone data, then release lock before async work
+        let capabilities: Vec<crate::discovery::capability::RegisteredCapability> = {
+            let registry = self.registry.read().await;
+            registry
+                .list_all_registered()
+                .into_iter()
+                .cloned()
+                .collect()
+        };
 
         let mut candidates: Vec<RoutingCandidate> = Vec::new();
 
-        for cap in capabilities {
+        for cap in &capabilities {
             // Skip unavailable if configured
             if self.config.available_only && !cap.available {
                 continue;
@@ -216,11 +227,14 @@ impl SemanticRouter {
                 continue;
             }
 
-            // Get node status for load info
-            let node_status = self
-                .node_status
-                .get(&cap.schema.metadata.did.as_str().to_string());
-            let load_score = node_status.map(|s| 1.0 - s.load).unwrap_or(0.5);
+            // Get node status for load info (read lock, brief access)
+            let load_score = {
+                let node_status = self.node_status.read().await;
+                node_status
+                    .get(cap.schema.metadata.did.as_str())
+                    .map(|s| 1.0 - s.load)
+                    .unwrap_or(0.5)
+            };
 
             // Process each endpoint
             for endpoint in &cap.schema.endpoints {
@@ -232,7 +246,7 @@ impl SemanticRouter {
                 // Calculate scores
                 let quality_score = cap.quality.success_rate;
                 let cost_score = self.calculate_cost_score(endpoint.base_cost);
-                let latency_score = self.calculate_latency_score(100); // TODO: actual latency
+                let latency_score = self.calculate_latency_score(100); // NOTE: Placeholder latency — actual value from node monitoring
 
                 let mut candidate = RoutingCandidate {
                     provider_did: cap.schema.metadata.did.as_str().to_string(),
@@ -293,11 +307,19 @@ impl SemanticRouter {
     /// Discover with detailed candidates
     pub async fn discover_detailed(&self, intent: &str) -> Result<Vec<RoutingCandidate>> {
         let intent_vec = self.vectorizer.vectorize(intent)?;
-        let capabilities = self.registry.list_all_registered();
+
+        let capabilities: Vec<crate::discovery::capability::RegisteredCapability> = {
+            let registry = self.registry.read().await;
+            registry
+                .list_all_registered()
+                .into_iter()
+                .cloned()
+                .collect()
+        };
 
         let mut candidates: Vec<RoutingCandidate> = Vec::new();
 
-        for cap in capabilities {
+        for cap in &capabilities {
             if self.config.available_only && !cap.available {
                 continue;
             }
@@ -313,10 +335,13 @@ impl SemanticRouter {
                 continue;
             }
 
-            let node_status = self
-                .node_status
-                .get(&cap.schema.metadata.did.as_str().to_string());
-            let load_score = node_status.map(|s| 1.0 - s.load).unwrap_or(0.5);
+            let load_score = {
+                let node_status = self.node_status.read().await;
+                node_status
+                    .get(cap.schema.metadata.did.as_str())
+                    .map(|s| 1.0 - s.load)
+                    .unwrap_or(0.5)
+            };
 
             for endpoint in &cap.schema.endpoints {
                 let mut candidate = RoutingCandidate {
@@ -363,10 +388,10 @@ impl SemanticRouter {
         (-latency_f32 / 1000.0).exp()
     }
 
-    /// Update node status
-    pub fn update_node_status(&self, did: &str, load: f32, latency_ms: u64) {
-        let mut status = self
-            .node_status
+    /// Update node status (async due to RwLock write guard)
+    pub async fn update_node_status(&self, did: &str, load: f32, latency_ms: u64) {
+        let mut node_status = self.node_status.write().await;
+        let mut status = node_status
             .get(did)
             .cloned()
             .unwrap_or_else(|| crate::discovery::node_status::NodeStatus::new(did));
@@ -374,8 +399,7 @@ impl SemanticRouter {
         status.load = load;
         status.avg_latency_ms = latency_ms;
 
-        // Note: This would need interior mutability in production
-        // For now, this is a placeholder
+        node_status.update(status);
     }
 }
 
@@ -494,5 +518,228 @@ mod tests {
 
         assert!(candidate.combined_score > 0.0);
         assert!(candidate.combined_score <= 1.0);
+    }
+
+    // ========== Boundary/Error Tests ==========
+
+    #[test]
+    fn test_routing_weights_validate_invalid() {
+        let weights = RoutingWeights {
+            similarity: 0.5,
+            quality: 0.5,
+            cost: 0.5,
+            load: 0.5,
+            latency: 0.5,
+        };
+        // Sum = 2.5, not 1.0
+        assert!(!weights.validate());
+    }
+
+    #[test]
+    fn test_routing_weights_validate_zero_sum() {
+        let weights = RoutingWeights {
+            similarity: 0.0,
+            quality: 0.0,
+            cost: 0.0,
+            load: 0.0,
+            latency: 0.0,
+        };
+        assert!(!weights.validate());
+    }
+
+    #[test]
+    fn test_routing_weights_normalize() {
+        let mut weights = RoutingWeights {
+            similarity: 2.0,
+            quality: 1.0,
+            cost: 1.0,
+            load: 0.5,
+            latency: 0.5,
+        };
+        weights.normalize();
+
+        // After normalization, sum should be ≈1.0
+        let sum =
+            weights.similarity + weights.quality + weights.cost + weights.load + weights.latency;
+        assert!((sum - 1.0).abs() < 0.01);
+        assert!(weights.validate());
+    }
+
+    #[test]
+    fn test_routing_weights_normalize_zero_sum_no_effect() {
+        let mut weights = RoutingWeights {
+            similarity: 0.0,
+            quality: 0.0,
+            cost: 0.0,
+            load: 0.0,
+            latency: 0.0,
+        };
+        weights.normalize();
+        // Zero sum should not cause division by zero; weights remain zero
+        assert_eq!(weights.similarity, 0.0);
+    }
+
+    #[test]
+    fn test_cost_score_monotonically_decreasing() {
+        let registry = CapabilityRegistry::new();
+        let router = SemanticRouter::new(registry);
+
+        let scores: Vec<f32> = [0, 10, 50, 100, 500, 1000]
+            .iter()
+            .map(|c| router.calculate_cost_score(*c))
+            .collect();
+
+        for i in 1..scores.len() {
+            assert!(
+                scores[i - 1] > scores[i],
+                "cost_score({}) = {} should be > cost_score({}) = {}",
+                [0, 10, 50, 100, 500, 1000][i - 1],
+                scores[i - 1],
+                [0, 10, 50, 100, 500, 1000][i],
+                scores[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_latency_score_monotonically_decreasing() {
+        let registry = CapabilityRegistry::new();
+        let router = SemanticRouter::new(registry);
+
+        let scores: Vec<f32> = [0, 50, 100, 500, 1000, 5000]
+            .iter()
+            .map(|l| router.calculate_latency_score(*l))
+            .collect();
+
+        for i in 1..scores.len() {
+            assert!(
+                scores[i - 1] > scores[i],
+                "latency_score({}) = {} should be > latency_score({}) = {}",
+                [0, 50, 100, 500, 1000, 5000][i - 1],
+                scores[i - 1],
+                [0, 50, 100, 500, 1000, 5000][i],
+                scores[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_cost_score_zero_is_one() {
+        let registry = CapabilityRegistry::new();
+        let router = SemanticRouter::new(registry);
+        // e^0 = 1.0
+        let score = router.calculate_cost_score(0);
+        assert!((score - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_latency_score_zero_is_one() {
+        let registry = CapabilityRegistry::new();
+        let router = SemanticRouter::new(registry);
+        // e^0 = 1.0
+        let score = router.calculate_latency_score(0);
+        assert!((score - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_candidate_combined_score_zero_weights() {
+        let mut candidate = RoutingCandidate {
+            provider_did: "did:nexa:test".to_string(),
+            endpoint_id: "ep1".to_string(),
+            endpoint_name: "Test".to_string(),
+            similarity_score: 0.9,
+            quality_score: 0.95,
+            cost_score: 0.8,
+            load_score: 0.7,
+            latency_score: 0.85,
+            combined_score: 0.0,
+            estimated_cost: 10,
+            estimated_latency_ms: 100,
+        };
+
+        let weights = RoutingWeights {
+            similarity: 0.0,
+            quality: 0.0,
+            cost: 0.0,
+            load: 0.0,
+            latency: 0.0,
+        };
+        candidate.calculate_combined_score(&weights);
+        assert!((candidate.combined_score - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_routing_config_default_values() {
+        let config = RoutingConfig::default();
+        assert_eq!(config.min_similarity, 0.5);
+        assert_eq!(config.max_cost, 0);
+        assert_eq!(config.max_latency_ms, 0);
+        assert!(config.available_only);
+        assert_eq!(config.min_quality, 0.8);
+    }
+
+    #[test]
+    fn test_router_set_weights() {
+        let registry = CapabilityRegistry::new();
+        let mut router = SemanticRouter::new(registry);
+
+        let weights = RoutingWeights {
+            similarity: 0.6,
+            quality: 0.2,
+            cost: 0.1,
+            load: 0.05,
+            latency: 0.05,
+        };
+        router.set_weights(weights);
+
+        let config = router.config();
+        assert!((config.weights.similarity - 0.6).abs() < 0.01);
+    }
+
+    // ========== Proptest Tests ==========
+
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Routing weights normalize → validate: after normalization, sum ≈ 1.0
+        #[test]
+        fn proptest_routing_weights_normalize(
+            sim in 0.01f32..5.0,
+            qual in 0.01f32..5.0,
+            cost in 0.01f32..5.0,
+            load in 0.01f32..5.0,
+            lat in 0.01f32..5.0,
+        ) {
+            let mut weights = RoutingWeights {
+                similarity: sim,
+                quality: qual,
+                cost: cost,
+                load: load,
+                latency: lat,
+            };
+            weights.normalize();
+
+            let sum = weights.similarity + weights.quality + weights.cost + weights.load + weights.latency;
+            assert!((sum - 1.0).abs() < 0.01, "normalized sum should be 1.0, got {}", sum);
+            assert!(weights.validate());
+        }
+
+        /// Cost score is always in (0, 1] and decreases with cost
+        #[test]
+        fn proptest_cost_score_range(cost in 0u64..10000) {
+            let registry = CapabilityRegistry::new();
+            let router = SemanticRouter::new(registry);
+            let score = router.calculate_cost_score(cost);
+            assert!(score > 0.0 && score <= 1.0, "cost_score({}) = {} out of range (0,1]", cost, score);
+        }
+
+        /// Latency score is always in (0, 1] and decreases with latency
+        #[test]
+        fn proptest_latency_score_range(latency in 0u32..10000) {
+            let registry = CapabilityRegistry::new();
+            let router = SemanticRouter::new(registry);
+            let score = router.calculate_latency_score(latency);
+            assert!(score > 0.0 && score <= 1.0, "latency_score({}) = {} out of range (0,1]", latency, score);
+        }
     }
 }

@@ -18,8 +18,9 @@ use std::time::{Duration, Instant};
 pub type StreamId = u32;
 
 /// Stream state enumeration
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StreamState {
+    #[default]
     /// Stream not yet used
     Idle,
     /// Stream is open for both directions
@@ -30,12 +31,6 @@ pub enum StreamState {
     HalfClosedRemote,
     /// Stream is fully closed
     Closed,
-}
-
-impl Default for StreamState {
-    fn default() -> Self {
-        StreamState::Idle
-    }
 }
 
 /// Stream statistics

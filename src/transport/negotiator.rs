@@ -26,10 +26,11 @@ use crate::types::{Encoding, Protocol};
 use std::time::{Duration, Instant};
 
 /// Compression type enumeration (matching Protobuf schema)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum CompressionType {
     /// Unspecified
     Unspecified = 0,
+    #[default]
     /// No compression
     None = 1,
     /// Gzip compression
@@ -38,12 +39,6 @@ pub enum CompressionType {
     Lz4 = 3,
     /// Zstd compression
     Zstd = 4,
-}
-
-impl Default for CompressionType {
-    fn default() -> Self {
-        CompressionType::None
-    }
 }
 
 impl From<CompressionType> for CompressionAlgorithm {
@@ -118,8 +113,9 @@ impl Default for ServerCapabilities {
 }
 
 /// Reject reason enumeration
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RejectReason {
+    #[default]
     /// Unspecified
     Unspecified = 0,
     /// Unsupported protocol
@@ -132,12 +128,6 @@ pub enum RejectReason {
     RateLimited = 4,
     /// Unauthorized
     Unauthorized = 5,
-}
-
-impl Default for RejectReason {
-    fn default() -> Self {
-        RejectReason::Unspecified
-    }
 }
 
 /// SYN-NEXA message (client -> server)
@@ -348,8 +338,9 @@ pub struct NegotiatedProtocol {
 }
 
 /// Negotiation state
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NegotiationState {
+    #[default]
     /// Initial state
     Initial,
     /// SYN-NEXA sent, waiting for ACK-SCHEMA
@@ -360,12 +351,6 @@ pub enum NegotiationState {
     Complete,
     /// Negotiation failed
     Failed,
-}
-
-impl Default for NegotiationState {
-    fn default() -> Self {
-        NegotiationState::Initial
-    }
 }
 
 /// Protocol negotiator (client side)
@@ -747,13 +732,13 @@ impl ServerNegotiator {
 
     /// Estimate cost for an intent
     fn estimate_cost(&self, _intent_hash: &str) -> u64 {
-        // TODO: Implement actual cost estimation based on intent
+        // NOTE: Placeholder cost estimation — actual value from capability metadata
         10
     }
 
     /// Estimate latency
     fn estimate_latency(&self) -> u32 {
-        // TODO: Implement actual latency estimation
+        // NOTE: Placeholder latency estimation — actual value from network monitoring
         50
     }
 }

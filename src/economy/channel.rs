@@ -43,7 +43,7 @@ impl Default for ChannelConfig {
 }
 
 /// Channel dispute state
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DisputeState {
     /// Dispute initiator
     pub initiator: String,
@@ -62,7 +62,7 @@ pub struct DisputeState {
 }
 
 /// State channel
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Channel {
     /// Channel ID
     pub id: ChannelId,
@@ -156,9 +156,9 @@ impl Channel {
 
         // Track transfer direction
         let transfer = if new_balance_a < self.balance_a {
-            self.balance_a - new_balance_a // A paid B
+            self.balance_a.saturating_sub(new_balance_a) // A paid B
         } else if new_balance_b < self.balance_b {
-            self.balance_b - new_balance_b // B paid A
+            self.balance_b.saturating_sub(new_balance_b) // B paid A
         } else {
             0
         };
@@ -474,6 +474,7 @@ impl ChannelManager {
     }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for ChannelManager {
     fn default() -> Self {
         Self {
@@ -608,5 +609,346 @@ mod tests {
         let stats = manager.stats();
         assert_eq!(stats.open_channels, 2);
         assert_eq!(stats.total_value_locked, 450);
+    }
+
+    // ========== Boundary/Error Tests ==========
+
+    #[test]
+    fn test_channel_zero_deposit_rejected() {
+        let mut manager = ChannelManager::new();
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        // Default min_deposit = 10, so 0 should be rejected
+        let result = manager.open(party_a, party_b, 0, 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_channel_below_min_deposit_rejected() {
+        let mut manager = ChannelManager::new();
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        // Default min_deposit = 10
+        let result = manager.open(party_a, party_b, 5, 5);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_channel_above_max_deposit_rejected() {
+        let mut manager = ChannelManager::new();
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        // Default max_deposit = 1_000_000
+        let result = manager.open(party_a, party_b, 2_000_000, 100);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_channel_transfer_zero_amount() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+
+        // Transfer 0 should succeed (no change)
+        channel.transfer_a_to_b(0).unwrap();
+        assert_eq!(channel.balance_a, 100);
+        assert_eq!(channel.balance_b, 50);
+        assert_eq!(channel.total_transferred, 0);
+    }
+
+    #[test]
+    fn test_channel_transfer_b_to_a() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+
+        channel.transfer_b_to_a(20).unwrap();
+        assert_eq!(channel.balance_a, 120);
+        assert_eq!(channel.balance_b, 30);
+        assert_eq!(channel.total_transferred, 20);
+    }
+
+    #[test]
+    fn test_channel_transfer_b_to_a_insufficient() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+
+        let result = channel.transfer_b_to_a(60);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_channel_balance_invariant_preserved() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+        let initial_total = channel.total_balance();
+
+        channel.transfer_a_to_b(30).unwrap();
+        assert_eq!(channel.total_balance(), initial_total);
+
+        channel.transfer_b_to_a(10).unwrap();
+        assert_eq!(channel.total_balance(), initial_total);
+
+        channel.transfer_a_to_b(0).unwrap();
+        assert_eq!(channel.total_balance(), initial_total);
+    }
+
+    #[test]
+    fn test_channel_update_with_wrong_total_rejected() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+
+        // New balances don't sum to total_deposit
+        let result = channel.update(100, 100);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_channel_cannot_operate_on_closed_channel() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+        channel.state = ChannelState::Closed;
+
+        let result = channel.transfer_a_to_b(10);
+        assert!(result.is_err());
+
+        let result = channel.update(50, 100);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_channel_cannot_initiate_close_on_closed_channel() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+        channel.state = ChannelState::Closed;
+
+        let result = channel.initiate_close(Duration::from_secs(3600));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_channel_total_deposit_equals_initial_balance() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+        assert_eq!(channel.total_deposit(), 100 + 50);
+        assert_eq!(channel.total_balance(), channel.total_deposit());
+    }
+
+    #[test]
+    fn test_channel_manager_cleanup_closed() {
+        let mut manager = ChannelManager::new();
+
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let ch = manager.open(party_a, party_b, 100, 50).unwrap();
+        let ch_id = ch.id.clone();
+
+        // Manually close the channel
+        manager.get_mut(&ch_id).unwrap().state = ChannelState::Closed;
+
+        let closed_ids = manager.cleanup_closed();
+        assert_eq!(closed_ids.len(), 1);
+        assert!(manager.get(&ch_id).is_none());
+    }
+
+    #[test]
+    fn test_channel_manager_list_for_peer() {
+        let mut manager = ChannelManager::new();
+
+        let alice = test_did("did:nexa:alice");
+        let bob = test_did("did:nexa:bob");
+        let carol = test_did("did:nexa:carol");
+
+        manager.open(alice.clone(), bob.clone(), 100, 50).unwrap();
+        manager
+            .open(alice.clone(), carol.clone(), 200, 100)
+            .unwrap();
+
+        let alice_channels = manager.list_for_peer(&alice);
+        assert_eq!(alice_channels.len(), 2);
+
+        let bob_channels = manager.list_for_peer(&bob);
+        assert_eq!(bob_channels.len(), 1);
+    }
+
+    #[test]
+    fn test_channel_dispute_and_resolve() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+
+        channel
+            .raise_dispute(
+                "did:nexa:alice",
+                "unfair balance",
+                Duration::from_secs(3600),
+            )
+            .unwrap();
+        assert_eq!(channel.state, ChannelState::Disputed);
+        assert!(channel.dispute.is_some());
+
+        // Resolve with valid balances
+        channel.resolve_dispute(80, 70).unwrap();
+        assert!(channel.is_closed());
+        assert!(channel.dispute.is_none());
+    }
+
+    #[test]
+    fn test_channel_resolve_dispute_wrong_balance() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+
+        channel
+            .raise_dispute("did:nexa:alice", "unfair", Duration::from_secs(3600))
+            .unwrap();
+
+        // Resolve with wrong total (should be 150)
+        let result = channel.resolve_dispute(100, 100);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_channel_add_evidence_no_dispute() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+
+        let result = channel.add_evidence(vec![1, 2, 3]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_channel_add_evidence_with_dispute() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+
+        channel
+            .raise_dispute("did:nexa:alice", "unfair", Duration::from_secs(3600))
+            .unwrap();
+        channel.add_evidence(vec![1, 2, 3]).unwrap();
+
+        let dispute = channel.dispute.as_ref().unwrap();
+        assert_eq!(dispute.evidence.len(), 1);
+    }
+
+    #[test]
+    fn test_channel_raise_dispute_on_closed_rejected() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+        channel.state = ChannelState::Closed;
+
+        let result = channel.raise_dispute("did:nexa:alice", "unfair", Duration::from_secs(3600));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_channel_finalize_close_not_closing_rejected() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let mut channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+        // Channel is Open, not Closing
+        let result = channel.finalize_close();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_channel_age_and_idle_time() {
+        let party_a = test_did("did:nexa:alice");
+        let party_b = test_did("did:nexa:bob");
+
+        let channel = Channel::new("ch-1", party_a, party_b, 100, 50);
+        // Age should be very small (just created)
+        assert!(channel.age() < Duration::from_secs(5));
+        assert!(channel.idle_time() < Duration::from_secs(5));
+    }
+
+    // ========== Proptest Tests ==========
+
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Balance invariant: balance_a + balance_b = deposit_a + deposit_b
+        /// for arbitrary legal transfer sequences
+        #[test]
+        fn proptest_channel_balance_invariant(
+            deposit_a in 10u64..1000,
+            deposit_b in 10u64..1000,
+            transfers in prop::collection::vec(
+                (prop::sample::select(&["a_to_b", "b_to_a"]), 1u64..100),
+                0..10,
+            ),
+        ) {
+            let party_a = test_did("did:nexa:alice");
+            let party_b = test_did("did:nexa:bob");
+
+            let mut channel = Channel::new("ch-1", party_a, party_b, deposit_a, deposit_b);
+            let initial_total = channel.total_balance();
+
+            for (direction, amount) in &transfers {
+                let result = if *direction == "a_to_b" {
+                    channel.transfer_a_to_b(*amount)
+                } else {
+                    channel.transfer_b_to_a(*amount)
+                };
+                // If the transfer was successful, invariant must hold
+                if result.is_ok() {
+                    assert_eq!(channel.total_balance(), initial_total,
+                        "Balance invariant violated after {} of {}",
+                        direction, amount);
+                }
+                // If rejected, it must be due to insufficient balance
+                if result.is_err() {
+                    // This is expected — just continue
+                }
+            }
+
+            // Final invariant still holds
+            assert_eq!(channel.total_balance(), initial_total);
+        }
+
+        /// Closed channel cannot accept any transfer
+        #[test]
+        fn proptest_closed_channel_no_transfers(
+            deposit_a in 10u64..1000,
+            deposit_b in 10u64..1000,
+            amount in 1u64..1000,
+        ) {
+            let party_a = test_did("did:nexa:alice");
+            let party_b = test_did("did:nexa:bob");
+
+            let mut channel = Channel::new("ch-1", party_a, party_b, deposit_a, deposit_b);
+            channel.state = ChannelState::Closed;
+
+            assert!(channel.transfer_a_to_b(amount).is_err());
+            assert!(channel.transfer_b_to_a(amount).is_err());
+            assert!(channel.update(deposit_a.saturating_sub(amount), deposit_b.saturating_add(amount)).is_err());
+        }
     }
 }

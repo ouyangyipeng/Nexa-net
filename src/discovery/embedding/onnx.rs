@@ -260,9 +260,11 @@ impl Embedder for OnnxEmbedder {
         let mut mask_sum = 0.0f32;
 
         // Process each token
+        #[allow(clippy::needless_range_loop)]
         for i in 0..token_count {
             let mask_val = attention_mask[i] as f32;
             mask_sum += mask_val;
+            #[allow(clippy::needless_range_loop)]
             for j in 0..hidden_size {
                 let idx = i * hidden_size + j;
                 if idx < output_slice.len() {

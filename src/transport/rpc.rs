@@ -18,8 +18,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot, RwLock};
 
 /// RPC status enumeration (matching Protobuf schema)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RpcStatus {
+    #[default]
     /// Success
     Success = 0,
     /// General error
@@ -34,12 +35,6 @@ pub enum RpcStatus {
     RateLimited = 5,
     /// Internal error
     InternalError = 6,
-}
-
-impl Default for RpcStatus {
-    fn default() -> Self {
-        RpcStatus::Success
-    }
 }
 
 /// Error type classification
@@ -230,8 +225,9 @@ impl RpcResponseHeader {
 }
 
 /// Data type enumeration
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DataType {
+    #[default]
     /// Binary data
     Binary = 0,
     /// Text data
@@ -246,12 +242,6 @@ pub enum DataType {
     Audio = 5,
     /// Video data
     Video = 6,
-}
-
-impl Default for DataType {
-    fn default() -> Self {
-        DataType::Binary
-    }
 }
 
 /// Data frame payload
@@ -308,6 +298,7 @@ pub enum RpcType {
 }
 
 /// Pending call tracking
+#[allow(dead_code)]
 struct PendingCall {
     /// Call ID
     call_id: u64,
@@ -344,6 +335,7 @@ pub struct RpcClient {
     next_call_id: u64,
     /// Default timeout
     default_timeout: Duration,
+    #[allow(dead_code)]
     /// Flow controller
     flow_controller: FlowController,
 }
@@ -365,7 +357,7 @@ impl RpcClient {
     pub fn endpoint(&self) -> &str {
         &self.endpoint
     }
-
+    #[allow(dead_code)]
     /// Generate next call ID
     fn next_call_id(&mut self) -> u64 {
         let id = self.next_call_id;
@@ -402,12 +394,12 @@ impl RpcClient {
 
         // Send headers frame
         let header_bytes = self.serialize_header(&header)?;
-        let headers_frame = Frame::headers(stream_id, header_bytes);
+        let _headers_frame = Frame::headers(stream_id, header_bytes);
 
         // Send data frame with END_STREAM
         let mut flags = FrameFlags::empty();
         flags.set_end_stream();
-        let data_frame = Frame::data(stream_id, request, false);
+        let _data_frame = Frame::data(stream_id, request, false);
 
         // Wait for response with timeout
         match tokio::time::timeout(timeout, response_rx).await {
@@ -440,21 +432,21 @@ impl RpcClient {
     /// Make an RPC call (simple interface)
     pub async fn call(&self, method: &str, request: Vec<u8>) -> Result<Vec<u8>> {
         // Simplified call for backward compatibility
-        let header = RpcHeader::new(method.to_string(), self.next_call_id, String::new());
+        let _header = RpcHeader::new(method.to_string(), self.next_call_id, String::new());
         Ok(request) // Placeholder
     }
 
     /// Start a server streaming RPC
     pub async fn start_server_stream(
         &mut self,
-        header: RpcHeader,
-        request: Vec<u8>,
+        _header: RpcHeader,
+        _request: Vec<u8>,
     ) -> Result<RpcStreamReceiver> {
         let stream_id = self.stream_manager.write().await.create_stream()?;
         self.stream_manager.write().await.open_stream(stream_id)?;
 
         // Create receiver channel
-        let (tx, rx) = mpsc::channel(64);
+        let (_tx, rx) = mpsc::channel(64);
 
         Ok(RpcStreamReceiver {
             stream_id,
@@ -466,14 +458,14 @@ impl RpcClient {
     /// Start a bidirectional streaming RPC
     pub async fn start_bidirectional_stream(
         &mut self,
-        header: RpcHeader,
+        _header: RpcHeader,
     ) -> Result<(RpcStreamSender, RpcStreamReceiver)> {
         let stream_id = self.stream_manager.write().await.create_stream()?;
         self.stream_manager.write().await.open_stream(stream_id)?;
 
         // Create channels
-        let (send_tx, send_rx) = mpsc::channel(64);
-        let (recv_tx, recv_rx) = mpsc::channel(64);
+        let (send_tx, _send_rx) = mpsc::channel(64);
+        let (_recv_tx, recv_rx) = mpsc::channel(64);
 
         let sender = RpcStreamSender {
             stream_id,
@@ -652,7 +644,7 @@ impl RpcServer {
 
         // Check if method exists
         if !self.methods.contains_key(&header.method) {
-            let error_response = RpcResponseHeader::error(
+            let _error_response = RpcResponseHeader::error(
                 header.call_id,
                 RpcStatus::Error,
                 "Method not found".to_string(),
@@ -669,7 +661,7 @@ impl RpcServer {
     }
 
     /// Handle data frame
-    fn handle_data_frame(&mut self, frame: Frame) -> Result<Option<Frame>> {
+    fn handle_data_frame(&mut self, _frame: Frame) -> Result<Option<Frame>> {
         // Data handling would be implemented with full frame processing
         Ok(None)
     }

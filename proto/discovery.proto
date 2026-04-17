@@ -1,0 +1,173 @@
+// Nexa-net Discovery Protocol
+// Layer 2: Capability Registration, Semantic Routing, and Node Status
+
+syntax = "proto3";
+
+package nexa.protocol.discovery;
+
+import "nexa_common.proto";
+import "google/protobuf/timestamp.proto";
+
+// ============================================================================
+// Capability Schema
+// ============================================================================
+
+message CapabilitySchema {
+  string version = 1;
+  ServiceMetadata metadata = 2;
+  repeated EndpointDefinition endpoints = 3;
+}
+
+message ServiceMetadata {
+  string did = 1;
+  string name = 2;
+  string description = 3;
+  repeated string tags = 4;
+}
+
+message EndpointDefinition {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  bytes input_schema = 4;  // JSON Schema encoded as bytes
+  bytes output_schema = 5; // JSON Schema encoded as bytes
+  CostModel cost = 6;
+  RateLimit rate_limit = 7;
+  QualityMetrics quality = 8;
+}
+
+message CostModel {
+  string model = 1;  // per_call, per_page, per_token
+  uint64 base_price = 2;  // in micro-NEXA
+  repeated CostModifier modifiers = 3;
+}
+
+message CostModifier {
+  string condition = 1;
+  float multiplier = 2;
+}
+
+message RateLimit {
+  uint32 max_concurrent = 1;
+  uint32 max_per_minute = 2;
+  uint32 max_per_day = 3;
+}
+
+message QualityMetrics {
+  float accuracy_score = 1;
+  uint32 avg_latency_ms = 2;
+  float availability = 3;
+  google.protobuf.Timestamp uptime_since = 4;
+}
+
+// ============================================================================
+// Registration Protocol
+// ============================================================================
+
+message RegisterRequest {
+  CapabilitySchema schema = 1;
+  bytes signature = 2;
+}
+
+message RegisterResponse {
+  bool success = 1;
+  string registration_id = 2;
+  string error = 3;
+}
+
+message UnregisterRequest {
+  string did = 1;
+  string reason = 2;
+  bytes signature = 3;
+}
+
+message UnregisterResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ============================================================================
+// Heartbeat Protocol
+// ============================================================================
+
+message HeartbeatRequest {
+  string did = 1;
+  NodeStatus status = 2;
+  bytes signature = 3;
+}
+
+message HeartbeatResponse {
+  bool acknowledged = 1;
+  google.protobuf.Timestamp server_time = 2;
+}
+
+message NodeStatus {
+  float cpu_usage = 1;
+  float memory_usage = 2;
+  uint32 active_connections = 3;
+  uint32 queue_depth = 4;
+  float load_factor = 5;  // 0.0 - 1.0
+  bool available = 6;
+}
+
+// ============================================================================
+// Routing Protocol
+// ============================================================================
+
+message RouteQueryRequest {
+  string intent = 1;
+  bytes intent_vector = 2;  // Pre-vectorized intent (optional)
+  RoutingWeights weights = 3;
+  uint32 max_results = 4;
+  float min_similarity = 5;
+  uint64 max_cost = 6;
+  uint32 max_latency_ms = 7;
+}
+
+message RouteQueryResponse {
+  repeated RouteCandidate candidates = 1;
+  RoutingExplanation explanation = 2;
+}
+
+message RouteCandidate {
+  string provider_did = 1;
+  string endpoint_id = 2;
+  string endpoint_name = 3;
+  float similarity_score = 4;
+  float quality_score = 5;
+  float cost_score = 6;
+  float load_score = 7;
+  float latency_score = 8;
+  float combined_score = 9;
+  uint64 estimated_cost = 10;
+  uint32 estimated_latency_ms = 11;
+}
+
+message RoutingWeights {
+  float similarity = 1;
+  float quality = 2;
+  float cost = 3;
+  float load = 4;
+  float latency = 5;
+}
+
+message RoutingExplanation {
+  string intent_vectorized = 1;
+  uint32 total_candidates = 2;
+  uint32 filtered_candidates = 3;
+  string selection_reason = 4;
+}
+
+// ============================================================================
+// Capability Query
+// ============================================================================
+
+message CapabilityQueryRequest {
+  string did = 1;  // Specific DID (optional)
+  repeated string tags = 2;  // Tag-based search
+  string name_pattern = 3;  // Name pattern search
+}
+
+message CapabilityQueryResponse {
+  repeated CapabilitySchema capabilities = 1;
+}

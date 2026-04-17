@@ -6,11 +6,12 @@
 //! # Components
 //!
 //! - **DID**: Nexa-DID generation, parsing, and resolution
-//! - **DID Document**: Identity document management
-//! - **Key Management**: Cryptographic key generation, storage, and rotation
-//! - **mTLS**: Mutual TLS authentication
-//! - **Credential**: Verifiable Credentials (VC) issuance and verification
-//! - **Trust Anchor**: Trust anchor and governance
+//! - **DID Document**: Identity document management (W3C DID Core spec)
+//! - **Key Management**: Cryptographic key generation, encrypted storage, and zeroize
+//! - **mTLS**: Mutual TLS authentication with DID-derived certificates
+//! - **Credential**: Verifiable Credentials (VC) with Ed25519 signing and verification
+//! - **Trust Anchor**: Trust anchor registry and governance
+//! - **Resolver**: DID resolution with caching and verification
 //!
 //! # Example
 //!
@@ -19,23 +20,27 @@
 //!
 //! // Generate a new identity
 //! let identity = IdentityKeys::generate().unwrap();
-//! let did = Did::new("did:nexa:alice");
+//! let did = Did::from_public_key(identity.signing.public_key().inner());
 //!
-//! // Create DID Document
-//! let document = DidDocument::new(&did, &identity.signing_key.public_key());
+//! // Create DID Document with full key material
+//! let document = DidDocument::from_identity_keys(&did, &identity);
 //! ```
 
 pub mod credential;
 pub mod did;
 pub mod did_document;
 pub mod key_management;
+pub mod mtls;
 pub mod resolver;
 pub mod trust_anchor;
 
 // Re-exports
 pub use credential::{CredentialClaim, VerifiableCredential};
 pub use did::Did;
-pub use did_document::DidDocument;
-pub use key_management::{IdentityKeys, KeyAgreementKeyPair, KeyPair, PrivateKey, PublicKey};
-pub use resolver::{DidResolutionResult, DidResolver};
-pub use trust_anchor::TrustAnchor;
+pub use did_document::{DidDocument, ServiceEndpoint, VerificationMethod};
+pub use key_management::{
+    IdentityKeys, KeyAgreementKeyPair, KeyMetadata, KeyPair, PrivateKey, PublicKey, SecureKeyStore,
+};
+pub use mtls::{generate_self_signed_cert, verify_cert_matches_did, DidCertificate, MtlsConfig};
+pub use resolver::{DidResolutionResult, DidResolver, ResolutionSource};
+pub use trust_anchor::{TrustAnchor, TrustAnchorRegistry};
