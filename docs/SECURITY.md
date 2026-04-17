@@ -1154,4 +1154,24 @@ class SecurityHealthCheck:
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
 - [RFC 8446 - TLS 1.3](https://datatracker.ietf.org/doc/html/rfc8446)
+
+---
+
+## 附录: Phase 1-12 安全层重构变更
+
+### 关键安全变更
+
+| Phase | 变更 | 说明 |
+|-------|------|------|
+| Phase 5 | XOR → AES-256-GCM | `src/security/secure_storage.rs` 中密钥存储加密从 XOR 简单混淆升级为 AES-256-GCM 工业级加密，使用 96-bit nonce + 128-bit tag |
+| Phase 5 | SecurityManager 协调器 | `src/security/mod.rs` 新增统一安全协调入口，整合所有安全子系统 |
+| Phase 7 | 审计日志集成 | `src/security/audit.rs` 实现结构化安全事件记录（SecurityEventType + AuditEntry），支持可追溯性 |
+| Phase 7 | 密钥轮换机制 | `src/security/key_rotation.rs` 实现自动/手动密钥轮换，支持轮换策略配置和轮换历史追踪 |
+| Phase 7 | 速率限制 middleware | `src/security/rate_limit.rs` Token Bucket + Sliding Window 双重速率限制，保护 API 端点免受滥用 |
+| Phase 7 | 安全 middleware | `src/security/middleware.rs` 请求验证/响应加密中间件层 |
+
+### 从错误中学习
+
+1. **XOR 加密不安全**: Phase 1-4 中使用了 XOR 简单加密存储密钥，Phase 5 识别到这是严重安全缺陷，替换为 AES-256-GCM。教训：永远不要在生产代码中使用 XOR 作为加密手段。
+2. **两种 Did 类型冲突**: 早期设计中存在 `Did(String)` 和 `Did { method, identifier }` 两种类型，导致 API 不一致。Phase 3 统一为 `Did(String)` + 辅助方法。
 - [W3C DID Security](https://www.w3.org/TR/did-core/#security)

@@ -1,6 +1,6 @@
 # Nexa-net 开发者接入指南
 
-> **版本:** v1.0.0-draft | **最后更新:** 2026-03-30
+> **版本:** v0.2.0 | **最后更新:** 2026-04-16 | **状态:** Phase 1-12 完成 ✅ | 485 tests | Clippy 0 warnings
 
 ## 目录
 
@@ -138,11 +138,24 @@ docker run -d \
 
 ```bash
 # 克隆仓库
-git clone https://github.com/nexa-net/nexa-proxy.git
-cd nexa-proxy
+git clone https://github.com/nexa-net/Nexa-net.git
+cd Nexa-net
 
 # 编译
 cargo build --release
+
+# 运行测试 (485 tests)
+cargo test
+
+# 运行 HTTP E2E 测试
+cargo test --test e2e_http_test
+
+# 运行 benchmark (45 Criterion benchmarks)
+cargo bench
+
+# 代码质量检查
+cargo clippy -- -D warnings   # 0 warnings ✅
+cargo fmt -- --check           # 格式一致 ✅
 
 # 安装
 sudo cp target/release/nexa-proxy /usr/local/bin/

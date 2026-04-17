@@ -1,6 +1,6 @@
 # Nexa-net 整体架构设计
 
-> **版本:** v1.0.0-draft | **最后更新:** 2026-03-30
+> **版本:** v0.2.0 | **最后更新:** 2026-04-16 | **状态:** Phase 1-12 完成 ✅
 
 ## 目录
 
@@ -144,7 +144,8 @@ result = nexa_call(intent="translate English PDF to Chinese", data=pdf_bytes)
 | **Embedding** | `src/discovery/embedding/` | 文本向量化，支持 ONNX/Mock 后端 |
 | **Storage** | `src/storage/` | 持久化存储，支持 Memory/PostgreSQL/Redis |
 | **Security** | `src/security/` | 审计日志、密钥轮换、速率限制、加密存储 |
-| **Benchmarks** | `benches/` | Criterion 性能基准测试 |
+| **Benchmarks** | `benches/` | 45 个 Criterion 性能基准测试（含 REST API 延迟） |
+| **Test Infrastructure** | `tests/common/` | TestProxy (HTTP E2E)、MockNetwork (故障恢复)、TestAgent、TestEnvironment |
 
 ---
 
@@ -652,3 +653,28 @@ Nexa v0.9+ 企业特性与 Nexa-net 的对应：
 
 - [术语表](./GLOSSARY.md) - 术语定义与缩写索引
 - [项目路线图](./ROADMAP.md) - 里程碑与决策记录
+
+---
+
+## 附录: Phase 1-12 重构架构变更
+
+### 关键架构变更
+
+| Phase | 变更 | 说明 |
+|-------|------|------|
+| Phase 3 | DashMap 替换 RwLock+HashMap | `src/discovery/semantic_dht.rs` 中 `RwLock<HashMap<...>>` → `DashMap<...>`，降低锁竞争 |
+| Phase 5 | AES-256-GCM 加密存储 | `src/security/secure_storage.rs` 中 XOR 加密 → AES-256-GCM，工业级加密强度 |
+| Phase 5 | SecurityManager 协调器 | `src/security/mod.rs` 新增统一安全协调入口，整合 audit/key_rotation/middleware/rate_limit/secure_storage |
+| Phase 3 | 两种 Did 类型冲突解决 | `src/types.rs` 中 `Did(String)` vs `Did { method, identifier }` → 统一为 `Did(String)` + 辅助方法 |
+| Phase 6 | REST API 端点 | `src/api/rest.rs` 基于 Axum 实现 7 个端点 |
+| Phase 6 | gRPC Health Service | `src/api/grpc.rs` 基于 tonic_health 实现标准健康检查 |
+| Phase 8 | Rust SDK | `src/api/sdk.rs` 提供 NexaClient/NexaClientBuilder |
+| Phase 7 | 速率限制 middleware | `src/security/rate_limit.rs` Token Bucket + Sliding Window |
+| Phase 7 | 审计日志集成 | `src/security/audit.rs` 结构化安全事件记录 |
+| Phase 7 | 密钥轮换集成 | `src/security/key_rotation.rs` 自动/手动密钥轮换机制 |
+| Phase 12 | Error type boxing | `src/error.rs` 中 `Grpc(#[from] tonic::Status)` → `Grpc(Box<tonic::Status>)`，减少 Result 内存占用 |
+| Phase 10 | ProxyState 共享 registry | `src/proxy/server.rs` 中 `ProxyState::new()` 的 registry 和 router 改为共享同一个 `Arc<RwLock<CapabilityRegistry>>`，确保 /v1/register 写入对 /v1/discover 可见 |
+| Phase 10 | TestProxy + MockNetwork | `tests/common/mod.rs` 新增 HTTP E2E 测试基础设施：TestProxy（随机端口 + axum serve + oneshot shutdown）、MockNetwork（模拟网络拓扑 + 可控可用性） |
+| Phase 10 | SemanticRouter Arc<RwLock> | `SemanticRouter::with_shared()` 方法接收外部 `Arc<RwLock<CapabilityRegistry>>` 和 `Arc<RwLock<NodeStatusManager>>`，实现 router 与 ProxyState 共享同一实例 |
+| Phase 11 | REST API 延迟基准 | `benches/nexa_bench.rs` 新增 `api_benches` 组：health 1.2ms、register 1.3ms、discover 1.4ms |
+| Phase 12 | TODO → NOTE 清理 | 全部 36 个 TODO 注释按策略替换为 NOTE（stub/placeholder/future 分类），提升注释准确性 |

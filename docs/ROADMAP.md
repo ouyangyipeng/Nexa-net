@@ -1,6 +1,6 @@
 # Nexa-net 项目路线图与决策记录
 
-> **版本:** v1.0.0-draft | **最后更新:** 2026-03-30
+> **版本:** v0.2.0 | **最后更新:** 2026-04-17 | **状态:** Phase 1-12 完成 ✅ | 485 tests | Clippy 0 warnings | HTTP E2E 0.94s
 
 ## 目录
 
@@ -359,6 +359,30 @@ PATCH: 向后兼容的问题修复
 **变更原因：** 项目启动，建立设计基线
 
 **影响范围：** 全部文档
+
+---
+
+### 2026-04-16 - Phase 10: 集成测试与 E2E HTTP 测试
+
+**变更类型：** 新增 + 修复
+
+**变更内容：**
+- 实现 `TestProxy` — 基于 axum 的 HTTP 测试服务器（随机端口 + graceful shutdown via oneshot）
+- 实现 `MockNetwork` — 模拟网络拓扑（可控节点可用性状态）
+- 创建 5 个 HTTP 级 E2E 测试（`tests/e2e_http_test.rs`）
+  - 双 Agent 通信（discover → channel → receipt）
+  - 多 Agent 社区（5 agents, cross-discovery, budget control）
+  - 经济闭环（10 calls → 10 receipts → settlement）
+  - 故障恢复（unavailable agent → fallback routing）
+  - 安全验证（unsigned receipt, forged VC, budget exceeded, rate limit）
+- 删除重复测试 `tests/integration/e2e_test.rs`（旧版 4 个基础测试副本）
+- **修复 ProxyState 关键 bug**: registry 和 router 现在共享同一个 `Arc<RwLock<CapabilityRegistry>` 实例，确保 `/v1/register` 写入对 `/v1/discover` 可见
+- **重构 SemanticRouter**: 改用 `Arc<RwLock<CapabilityRegistry/NodeStatusManager>>` 支持并发读写
+- **修复 REST handler**: `/v1/discover` 现在传递 `max_candidates` 参数而非使用默认 0
+
+**变更原因：** 原有测试全部是内存级（直接调用 Rust API），未经过 HTTP 层；ProxyState 中 registry/router 使用不同实例导致 REST API 写入不可见
+
+**影响范围：** `src/discovery/router.rs`, `src/proxy/server.rs`, `src/api/rest.rs`, `tests/common/mod.rs`, `tests/e2e_http_test.rs` (新增)
 
 ---
 

@@ -4,9 +4,10 @@
   <p><b><i>Decentralized M2M Communication Infrastructure for AI Agent Networks</i></b></p>
   <p>
     <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="License"/>
-    <img src="https://img.shields.io/badge/Version-v0.1.0--alpha-brightgreen.svg?style=for-the-badge" alt="Version"/>
-    <img src="https://img.shields.io/badge/Rust-1.70%2B-orange.svg?style=for-the-badge" alt="Rust"/>
-    <img src="https://img.shields.io/badge/Status-Experimental-orange.svg?style=for-the-badge" alt="Status"/>
+    <img src="https://img.shields.io/badge/Version-v0.2.0-brightgreen.svg?style=for-the-badge" alt="Version"/>
+    <img src="https://img.shields.io/badge/Rust-1.75%2B-orange.svg?style=for-the-badge" alt="Rust"/>
+    <img src="https://img.shields.io/badge/Tests-485%20passed-brightgreen.svg?style=for-the-badge" alt="Tests"/>
+    <img src="https://img.shields.io/badge/Clippy-0%20warnings-green.svg?style=for-the-badge" alt="Clippy"/>
   </p>
   
   **中文版** | **[English](#overview)**
@@ -50,6 +51,20 @@
 - **Micro-Receipt** - 轻量级交易凭证，链下结算
 - **Budget Controller** - 预算控制，防止资源滥用
 
+### 🛡️ Security Layer
+工业级安全防护：
+- **AES-256-GCM** - 加密密钥存储，替代 XOR 加密
+- **SecurityManager** - 统一安全协调器，整合审计/密钥轮换/速率限制
+- **Audit Log** - 结构化安全事件记录
+- **Key Rotation** - 自动/手动密钥轮换机制
+- **Rate Limiting** - Token Bucket + Sliding Window 速率限制
+
+### 🌐 API Layer
+多协议接入：
+- **REST API** - 7 个端点（Axum），支持 JSON 请求/响应
+- **gRPC Health** - 标准 gRPC Health Checking Protocol（tonic_health）
+- **Rust SDK** - NexaClient/NexaClientBuilder，零成本抽象接入
+
 ---
 
 ## 📐 Architecture
@@ -91,7 +106,7 @@ cargo run --bin nexa-proxy --release
 ```
 
 The proxy service will start on:
-- REST API: `http://127.0.0.1:7070/api/v1`
+- REST API: `http://127.0.0.1:7070/v1`
 - gRPC: `127.0.0.1:7071`
 
 ---
@@ -187,19 +202,30 @@ src/
 
 ## 🧪 Testing
 
+**485 tests passed | Clippy 0 warnings | cargo fmt clean | 45 Criterion benchmarks**
+
 ```bash
-# Run unit tests
-cargo test --lib
+# Run all tests (unit + integration + HTTP E2E)
+cargo test
 
-# Run integration tests
-cargo test --test '*'
-
-# Run with all features
-cargo test --all-features
+# Run HTTP E2E tests specifically
+cargo test --test e2e_http_test
 
 # Run benchmarks
 cargo bench
+
+# Lint check
+cargo clippy -- -D warnings
 ```
+
+**Performance highlights** (see [PERFORMANCE.md](docs/PERFORMANCE.md)):
+| Metric | Result |
+|--------|--------|
+| Route latency | ~31 µs (3,200x below 100ms target) |
+| Channel TPS | ~9.9M ops/s (990x above 10K target) |
+| JSON serialization | ~5.6M ops/s (56x above 100K target) |
+| REST API health | ~1.2 ms end-to-end |
+| REST API discover | ~1.4 ms end-to-end |
 
 ---
 

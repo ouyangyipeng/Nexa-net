@@ -1,6 +1,6 @@
 # Nexa-net API 接口规范
 
-> **版本:** v1.0.0-draft | **最后更新:** 2026-03-30
+> **版本:** v2.0.0 | **最后更新:** 2026-04-16 | **状态:** Phase 1-12 重构完成
 
 ## 目录
 
@@ -81,7 +81,7 @@ Accept: application/vnd.nexa.v1+json
 #### 2.1.1 基础端点
 
 ```
-Base URL: http://127.0.0.1:7070/api/v1
+Base URL: http://127.0.0.1:7070/v1
 ```
 
 #### 2.1.2 网络调用
@@ -1382,4 +1382,62 @@ async def safe_call():
 
 - [gRPC Documentation](https://grpc.io/docs/)
 - [OpenAPI Specification](https://spec.openapis.org/oas/v3.1.0)
+
+---
+
+## 附录: Phase 6-12 重构变更记录
+
+### Phase 6: REST API 端点实现
+
+新增 7 个 REST API 端点（基于 Axum），对应 `src/api/rest.rs`:
+
+| 端点 | 方法 | 功能 |
+|------|------|------|
+| `/v1/call` | POST | 发起网络调用 |
+| `/v1/register` | POST | 注册本地能力 |
+| `/v1/discover` | POST | 按意图发现能力 |
+| `/v1/channels` | GET | 列出开放通道 |
+| `/v1/balance/:did` | GET | 查询 DID 余额 |
+| `/v1/status` | GET | Proxy 状态 |
+| `/v1/health` | GET | 健康检查 |
+
+### Phase 6: gRPC Health Service
+
+基于 `tonic_health` 实现标准 gRPC Health Checking Protocol，监听 `localhost:7071`。
+参见 `src/api/grpc.rs`。
+
+### Phase 10: HTTP E2E 测试基础设施
+
+新增 TestProxy 和 MockNetwork (`tests/common/mod.rs`)，用于 REST API 端到端测试：
+
+**TestProxy** — 轻量级 HTTP 测试服务器：
+- 基于 `TcpListener::bind("127.0.0.1:0")` 随机端口 + `RestServer::build_router()` + `axum::serve().with_graceful_shutdown()`
+- 支持直接内部操作（`register_capability`, `open_channel`）和 HTTP 操作（`health`, `discover`, `register`, `call`, `status`）
+- 自动配置 SemanticRouter 为测试模式（min_similarity=-1.0, min_quality=0.0）
+
+**MockNetwork** — 模拟网络拓扑：
+- 创建 N 个 TCP listener 端点模拟真实网络节点
+- 支持 `mark_unavailable`/`mark_available` 模拟节点故障和恢复
+- 用于故障恢复和容错 E2E 测试场景
+
+**HTTP E2E 测试** (`tests/e2e_http_test.rs`)：
+- 注册 → 发现 → 通道 → 预算 → 状态 全链路验证
+- 5 个测试场景，运行时间 < 1.5s
+
+### Phase 11: REST API 延迟基准
+
+新增 `api_benches` Criterion 组 (`benches/nexa_bench.rs`)：
+
+| 基准 | 均值延迟 | 说明 |
+|------|---------|------|
+| `api/rest_health` | 1.2 ms | GET /v1/health |
+| `api/rest_register` | 1.3 ms | POST /v1/register |
+| `api/rest_discover` | 1.4 ms | POST /v1/discover |
+
+使用与 TestProxy 相同的服务器 setup 模式（随机端口 + axum serve + oneshot shutdown）。
+
+### Phase 8: SDK 接口
+
+新增 Rust SDK (`src/api/sdk.rs`)，提供 `NexaClient` 和 `NexaClientBuilder`，
+支持 `call()`, `register()`, `discover()`, `list_channels()`, `get_balance()` 等方法。
 - [Protocol Buffers](https://protobuf.dev/)
